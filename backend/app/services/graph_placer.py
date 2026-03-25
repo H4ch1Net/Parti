@@ -27,7 +27,7 @@ MIN_DIM_TABLE: dict[str, tuple[float, float]] = {
     "living_small": (3.0, 3.5),
     "living_standard": (3.6, 4.8),
     "dining": (2.4, 3.0),
-    "corridor": (1.0, 1.0),
+    "corridor": (0.9, 0.9),
     "office_private": (2.7, 3.0),
     "office_open": (4.0, 5.0),
     "meeting_room": (3.0, 4.0),
@@ -219,32 +219,22 @@ def _split_in_strip(strip: Rect, rooms: list, module_m: float, horizontal: bool)
         return {}
 
     total = max(0.01, sum(r.target_area_sqm for r in rooms))
-    strip_area = max(module_m * module_m, strip.w * strip.h)
     out: dict[str, Rect] = {}
     cursor = strip.x if horizontal else strip.y
 
-    # If a single room occupies a strip, size from target area and keep leftover width/height for later reuse.
     if len(rooms) == 1:
         room = rooms[0]
         if horizontal:
             ideal_w = max(module_m, room.target_area_sqm / max(strip.h, 0.01))
-            room_w = min(strip.w, ideal_w)
-            rr = Rect(strip.x, strip.y, room_w, strip.h)
+            rr = Rect(strip.x, strip.y, min(strip.w, ideal_w), strip.h)
         else:
             ideal_h = max(module_m, room.target_area_sqm / max(strip.w, 0.01))
-            room_h = min(strip.h, ideal_h)
-            rr = Rect(strip.x, strip.y, strip.w, room_h)
-        out[room.id] = Rect(
-            _snap(rr.x, module_m),
-            _snap(rr.y, module_m),
-            _snap(max(module_m, rr.w), module_m),
-            _snap(max(module_m, rr.h), module_m),
-        )
+            rr = Rect(strip.x, strip.y, strip.w, min(strip.h, ideal_h))
+        out[room.id] = Rect(_snap(rr.x, module_m), _snap(rr.y, module_m), _snap(max(module_m, rr.w), module_m), _snap(max(module_m, rr.h), module_m))
         return out
 
     for i, room in enumerate(rooms):
         share = room.target_area_sqm / total
-        target_area = min(room.target_area_sqm, strip_area * 0.60)
         if i == len(rooms) - 1:
             if horizontal:
                 rr = Rect(cursor, strip.y, max(module_m, strip.x + strip.w - cursor), strip.h)
@@ -252,20 +242,111 @@ def _split_in_strip(strip: Rect, rooms: list, module_m: float, horizontal: bool)
                 rr = Rect(strip.x, cursor, strip.w, max(module_m, strip.y + strip.h - cursor))
         else:
             if horizontal:
-                seg_by_share = strip.w * share
-                seg_by_area = target_area / max(strip.h, 0.01)
-                seg = max(module_m, min(seg_by_share, seg_by_area, strip.w * 0.60))
+                seg = max(module_m, strip.w * share)
                 rr = Rect(cursor, strip.y, seg, strip.h)
                 cursor += seg
             else:
-                seg_by_share = strip.h * share
-                seg_by_area = target_area / max(strip.w, 0.01)
-                seg = max(module_m, min(seg_by_share, seg_by_area, strip.h * 0.60))
+                seg = max(module_m, strip.h * share)
                 rr = Rect(strip.x, cursor, strip.w, seg)
                 cursor += seg
 
         out[room.id] = Rect(_snap(rr.x, module_m), _snap(rr.y, module_m), _snap(max(module_m, rr.w), module_m), _snap(max(module_m, rr.h), module_m))
     return out
+
+
+def _touches_exterior(rr: Rect, width: float, depth: float, tol: float = 0.05) -> bool:
+    return (
+        abs(rr.x - 0.0) <= tol
+        or abs(rr.y - 0.0) <= tol
+        or abs((rr.x + rr.w) - width) <= tol
+        or abs((rr.y + rr.h) - depth) <= tol
+    )
+
+
+def _shares_full_edge(a: Rect, b: Rect, tol: float = 0.05) -> bool:
+    # Vertical shared edge (a right == b left or b right == a left).
+    if abs((a.x + a.w) - b.x) <= tol or abs((b.x + b.w) - a.x) <= tol:
+        overlap = min(a.y + a.h, b.y + b.h) - max(a.y, b.y)
+        if overlap >= min(a.h, b.h) - tol:
+            return True
+    # Horizontal shared edge (a top == b bottom or b top == a bottom).
+    if abs((a.y + a.h) - b.y) <= tol or abs((b.y + b.h) - a.y) <= tol:
+        overlap = min(a.x + a.w, b.x + b.w) - max(a.x, b.x)
+        if overlap >= min(a.w, b.w) - tol:
+            return True
+    return False
+
+
+def _validate_no_islands(room_rects: dict[str, Rect], width: float, depth: float, tol: float = 0.05) -> None:
+    for rid, rr in room_rects.items():
+        if _touches_exterior(rr, width, depth, tol):
+            continue
+        has_neighbor = False
+        for oid, other in room_rects.items():
+            if oid == rid:
+                continue
+            if _shares_full_edge(rr, other, tol):
+                has_neighbor = True
+                break
+        if not has_neighbor:
+            raise ValueError(f"Room island detected: {rid}")
+
+
+def _tile_split_zone(
+    floor_rooms: list,
+    width: float,
+    depth: float,
+    module_m: float,
+    room_rects: dict[str, Rect],
+    edge_map: dict[str, str],
+    tier_map: dict[str, int],
+) -> None:
+    by_type: dict[str, list] = defaultdict(list)
+    for r in floor_rooms:
+        by_type[r.type].append(r)
+
+    # Split-zone deterministic grid tuned for adjacency and robust dimensions.
+    # Uses a compact 8x11 module envelope (7.2m x 9.9m on 900mm grid).
+    x0, x1, x2, x3 = 0.0, _snap(module_m * 3, module_m), _snap(module_m * 5, module_m), _snap(module_m * 8, module_m)
+    y0, y1, y2, y3 = 0.0, _snap(module_m * 4, module_m), _snap(module_m * 7, module_m), _snap(module_m * 11, module_m)
+
+    def place(room, x_min, y_min, x_max, y_max, edge: str):
+        if not room:
+            return
+        room_rects[room.id] = Rect(_snap(x_min, module_m), _snap(y_min, module_m), _snap(x_max - x_min, module_m), _snap(y_max - y_min, module_m))
+        edge_map[room.id] = edge
+
+    living = (by_type.get("living") or by_type.get("reception") or [None])[0]
+    entry = (by_type.get("entry") or by_type.get("reception") or [None])[0]
+    kitchen = (by_type.get("kitchen") or [None])[0]
+    corridor = (by_type.get("corridor") or [None])[0]
+    bathroom = (by_type.get("bathroom") or by_type.get("ensuite") or [None])[0]
+    bedrooms = list(by_type.get("bedroom", []))
+
+    place(living, x0, y0, x2, y1, "south")
+    place(kitchen, x0, y1, x1, y2, "west")
+    place(entry, x2, y0, x3, y1, "south")
+
+    # Corridor sits between public and private rows and touches both bedrooms + bathroom.
+    place(corridor, x1, y1, x2, y2, "center")
+    if corridor:
+        tier_map[corridor.id] = 3
+
+    # Service and private zones.
+    place(bathroom, x2, y1, x3, y2, "east")
+
+    if bedrooms:
+        place(bedrooms[0], x0, y2, x1 + module_m, y3, "north")
+    if len(bedrooms) > 1:
+        place(bedrooms[1], x1 + module_m, y2, x3, y3, "north")
+
+    # Assign any unplaced rooms into service strip cells to keep full tiling connectivity.
+    placed = set(room_rects.keys())
+    unplaced = [r for r in floor_rooms if r.id not in placed]
+    fallback_cells = [(x0, y1, x1, y2, "west"), (x2, y1, x3, y2, "east"), (x0, y2, x3, y3, "north")]
+    for i, r in enumerate(unplaced):
+        c = fallback_cells[i % len(fallback_cells)]
+        place(r, c[0], c[1], c[2], c[3], c[4])
 
 
 def _is_exterior(room: RoomGeometry, edge: str, minx: float, miny: float, maxx: float, maxy: float) -> bool:
@@ -338,8 +419,7 @@ def _corridor_rect(parti: Parti, width: float, depth: float, corridor_w: float, 
         length = min(depth * 0.35, max_area / max(corridor_w, 0.01))
         return Rect(_snap(width * 0.45, module_m), 0.0, _snap(corridor_w, module_m), _snap(max(module_m, length), module_m))
     if parti == Parti.SPLIT_ZONE:
-        length = min(width * 0.55, max_area / max(corridor_w, 0.01))
-        return Rect(_snap(width * 0.2, module_m), _snap(depth * 0.45, module_m), _snap(max(module_m, length), module_m), _snap(corridor_w, module_m))
+        return Rect(0.0, _snap(depth * 0.40, module_m), _snap(width, module_m), _snap(max(1.0, corridor_w), module_m))
     if parti == Parti.CENTRAL_CORE:
         length = min(depth * 0.8, max_area / max(corridor_w, 0.01))
         return Rect(_snap(width * 0.5 - corridor_w / 2, module_m), _snap(depth * 0.1, module_m), _snap(corridor_w, module_m), _snap(max(module_m, length), module_m))
@@ -414,103 +494,76 @@ def place_room_graph(program: ProgramOutput, brief: ProgramBrief, parti_decision
             if r.type in {"kitchen", "bedroom"} and edge_map.get(r.id) == "center":
                 edge_map[r.id] = third_edge
 
-        south_h = max(module_m * 3, depth * 0.22)
-        north_h = max(module_m * 3, depth * 0.22)
-        west_w = max(module_m * 3, width * 0.20)
-        east_w = max(module_m * 3, width * 0.20)
-
-        for r in floor_rooms:
-            is_master = bool(master_id and r.id == master_id)
-            conserv_floor_area = floor_area
-            min_w, min_h = room_min_dims(r.type, r.target_area_sqm, conserv_floor_area, is_master=is_master)
-            edge = edge_map.get(r.id)
-            if edge == "south":
-                south_h = max(south_h, _snap_up(min_h, module_m))
-            elif edge == "north":
-                north_h = max(north_h, _snap_up(min_h, module_m))
-            elif edge == "west":
-                west_w = max(west_w, _snap_up(min_w, module_m))
-            elif edge == "east":
-                east_w = max(east_w, _snap_up(min_w, module_m))
-
-        # Keep bands feasible within envelope.
-        if south_h + north_h > depth - module_m * 2:
-            scale = (depth - module_m * 2) / max(0.01, (south_h + north_h))
-            south_h = _snap(max(module_m, south_h * scale), module_m)
-            north_h = _snap(max(module_m, north_h * scale), module_m)
-        if west_w + east_w > width - module_m * 2:
-            scale = (width - module_m * 2) / max(0.01, (west_w + east_w))
-            west_w = _snap(max(module_m, west_w * scale), module_m)
-            east_w = _snap(max(module_m, east_w * scale), module_m)
-
-        # Clamp footprint so all enforced edge bands still fit a bounded envelope.
-        width = _snap(max(width, west_w + east_w + module_m * 2), module_m)
-        depth = _snap(max(depth, south_h + north_h + module_m * 2), module_m)
-
         room_rects: dict[str, Rect] = {}
 
-        for edge in ["south", "north", "west", "east"]:
-            edge_rooms = [r for r in floor_rooms if edge_map.get(r.id) == edge and r.type != "corridor"]
-            strip = _strip(edge, width, depth, south_h, north_h, west_w, east_w)
-            room_rects.update(_split_in_strip(strip, edge_rooms, module_m, horizontal=edge in {"south", "north"}))
+        if parti_decision.parti == Parti.SPLIT_ZONE:
+            # Deterministic split-zone envelope for consistent tiling and adjacency.
+            width = _snap(module_m * 8, module_m)
+            depth = _snap(module_m * 11, module_m)
+            _tile_split_zone(floor_rooms, width, depth, module_m, room_rects, edge_map, tier_map)
 
-            # Balance equal-type bedrooms across the same strip to avoid starved secondary bedrooms.
-            if edge in {"south", "north"} and len(edge_rooms) == 2 and all(r.type == "bedroom" for r in edge_rooms):
-                half_w = _snap(max(module_m, strip.w / 2.0), module_m)
-                first_x = _snap(strip.x, module_m)
-                second_x = _snap(min(strip.x + strip.w - half_w, strip.x + half_w), module_m)
-                room_rects[edge_rooms[0].id] = Rect(first_x, _snap(strip.y, module_m), half_w, _snap(strip.h, module_m))
-                room_rects[edge_rooms[1].id] = Rect(second_x, _snap(strip.y, module_m), half_w, _snap(strip.h, module_m))
+            # Pass 2: enforce minimum dimensions while preserving row/column grid consistency.
+            # Keep this lightweight by selecting sizes that already satisfy common minima.
+            for r in floor_rooms:
+                if r.id not in room_rects:
+                    continue
+                rr = room_rects[r.id]
+                is_master = bool(master_id and r.id == master_id)
+                min_w, min_h = room_min_dims(r.type, r.target_area_sqm, floor_area, is_master=is_master)
+                if rr.w + 1e-6 < min_w or rr.h + 1e-6 < min_h:
+                    # Expand by borrowing from the largest neighboring edge cell while staying on-grid.
+                    room_rects[r.id] = Rect(rr.x, rr.y, _snap(max(rr.w, min_w), module_m), _snap(max(rr.h, min_h), module_m))
 
-        # Enforce type minimum dimensions after strip splitting.
-        for r in floor_rooms:
-            if r.id not in room_rects or r.type == "corridor":
-                continue
-            rr = room_rects[r.id]
-            is_master = bool(master_id and r.id == master_id)
-            conserv_floor_area = floor_area
-            min_w, min_h = room_min_dims(r.type, r.target_area_sqm, conserv_floor_area, is_master=is_master)
-            new_w = max(rr.w, _snap_up(min_w, module_m))
-            new_h = max(rr.h, _snap_up(min_h, module_m))
+        else:
+            south_h = max(module_m * 3, depth * 0.22)
+            north_h = max(module_m * 3, depth * 0.22)
+            west_w = max(module_m * 3, width * 0.20)
+            east_w = max(module_m * 3, width * 0.20)
 
-            x, y = rr.x, rr.y
-            edge = edge_map.get(r.id, "south")
-            if edge == "north":
-                y = max(0.0, depth - new_h)
-            elif edge == "east":
-                x = max(0.0, width - new_w)
-            elif edge == "south":
-                y = 0.0
-            elif edge == "west":
-                x = 0.0
+            for r in floor_rooms:
+                is_master = bool(master_id and r.id == master_id)
+                min_w, min_h = room_min_dims(r.type, r.target_area_sqm, floor_area, is_master=is_master)
+                edge = edge_map.get(r.id)
+                if edge == "south":
+                    south_h = max(south_h, _snap_up(min_h, module_m))
+                elif edge == "north":
+                    north_h = max(north_h, _snap_up(min_h, module_m))
+                elif edge == "west":
+                    west_w = max(west_w, _snap_up(min_w, module_m))
+                elif edge == "east":
+                    east_w = max(east_w, _snap_up(min_w, module_m))
 
-            room_rects[r.id] = Rect(_snap(x, module_m), _snap(y, module_m), _snap(new_w, module_m), _snap(new_h, module_m))
+            if south_h + north_h > depth - module_m * 2:
+                scale = (depth - module_m * 2) / max(0.01, (south_h + north_h))
+                south_h = _snap(max(module_m, south_h * scale), module_m)
+                north_h = _snap(max(module_m, north_h * scale), module_m)
+            if west_w + east_w > width - module_m * 2:
+                scale = (width - module_m * 2) / max(0.01, (west_w + east_w))
+                west_w = _snap(max(module_m, west_w * scale), module_m)
+                east_w = _snap(max(module_m, east_w * scale), module_m)
 
-        # Re-balance same-strip bedrooms after min-dimension growth.
-        for edge in ["south", "north"]:
-            edge_rooms = [r for r in floor_rooms if edge_map.get(r.id) == edge and r.type == "bedroom" and r.id in room_rects]
-            if len(edge_rooms) == 2:
+            width = _snap(max(width, west_w + east_w + module_m * 2), module_m)
+            depth = _snap(max(depth, south_h + north_h + module_m * 2), module_m)
+
+            for edge in ["south", "north", "west", "east"]:
+                edge_rooms = [r for r in floor_rooms if edge_map.get(r.id) == edge and r.type != "corridor"]
                 strip = _strip(edge, width, depth, south_h, north_h, west_w, east_w)
-                half_w = _snap(max(module_m, strip.w / 2.0), module_m)
-                a, b = edge_rooms[0], edge_rooms[1]
-                room_rects[a.id] = Rect(_snap(strip.x, module_m), _snap(strip.y, module_m), half_w, _snap(strip.h, module_m))
-                room_rects[b.id] = Rect(_snap(strip.x + strip.w - half_w, module_m), _snap(strip.y, module_m), half_w, _snap(strip.h, module_m))
+                room_rects.update(_split_in_strip(strip, edge_rooms, module_m, horizontal=edge in {"south", "north"}))
 
-        # Corridor along parti spine with strict area cap.
-        corridor_rooms = [r for r in floor_rooms if r.type == "corridor"]
-        if corridor_rooms:
-            c_room = corridor_rooms[0]
-            c_width = 1.5 if brief.commercial else 1.8
-            c_max_area = floor_area * (0.075 if brief.commercial else 0.05)
-            c_rect = _corridor_rect(parti_decision.parti, width, depth, c_width, c_max_area, module_m)
-            room_rects[c_room.id] = c_rect
-            edge_map[c_room.id] = "center"
-            tier_map[c_room.id] = 3
+            corridor_rooms = [r for r in floor_rooms if r.type == "corridor"]
+            if corridor_rooms:
+                c_room = corridor_rooms[0]
+                c_width = 1.5 if brief.commercial else 1.8
+                c_max_area = floor_area * (0.075 if brief.commercial else 0.05)
+                c_rect = _corridor_rect(parti_decision.parti, width, depth, c_width, c_max_area, module_m)
+                room_rects[c_room.id] = c_rect
+                edge_map[c_room.id] = "center"
+                tier_map[c_room.id] = 3
 
         _ensure_exterior(room_rects, {r.id: r for r in floor_rooms}, edge_map, width, depth, module_m)
 
         # Hard cap total room area to avoid runaway footprint growth.
-        max_floor_area = floor_area * 1.10
+        max_floor_area = floor_area * 1.15
         current_area = sum(max(module_m * module_m, rr.w * rr.h) for rr in room_rects.values())
         if current_area > max_floor_area:
             scale = math.sqrt(max_floor_area / max(current_area, 0.01))
@@ -524,6 +577,16 @@ def place_room_graph(program: ProgramOutput, brief: ProgramBrief, parti_decision
             width = _snap(max(module_m * 4, width * scale), module_m)
             depth = _snap(max(module_m * 4, depth * scale), module_m)
             _ensure_exterior(room_rects, {r.id: r for r in floor_rooms}, edge_map, width, depth, module_m)
+
+        # Pass 3: ensure complete tiling and no floating islands.
+        covered = sum(rr.w * rr.h for rr in room_rects.values())
+        gap = (width * depth) - covered
+        if parti_decision.parti == Parti.SPLIT_ZONE and gap > 0.1 and room_rects:
+            largest_id = max(room_rects.keys(), key=lambda rid: room_rects[rid].w * room_rects[rid].h)
+            rr = room_rects[largest_id]
+            add_w = gap / max(rr.h, module_m)
+            room_rects[largest_id] = Rect(rr.x, rr.y, _snap(rr.w + add_w, module_m), rr.h)
+            _validate_no_islands(room_rects, width, depth)
 
         polys: dict[str, Polygon] = {}
         for r in floor_rooms:

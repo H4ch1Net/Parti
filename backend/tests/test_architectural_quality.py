@@ -434,3 +434,92 @@ class TestScoringIntegrity:
             f"Score has only {len(sub_scores)} sub-categories: {list(sub_scores.keys())}. "
             f"Need at least 3 to measure different quality dimensions."
         )
+
+# ---------------------------------------------------------------------------
+# SUITE 7 — Tiling integrity
+# Rooms must share edges. No floating islands. No voids.
+# ---------------------------------------------------------------------------
+
+class TestTilingIntegrity:
+
+    def _shared_edge(self, r1, r2, tol=0.08):
+        """Returns True if r1 and r2 share at least one full edge."""
+        r1xs = [p[0] for p in r1.polygon]
+        r1ys = [p[1] for p in r1.polygon]
+        r2xs = [p[0] for p in r2.polygon]
+        r2ys = [p[1] for p in r2.polygon]
+
+        r1_x0, r1_x1 = min(r1xs), max(r1xs)
+        r1_y0, r1_y1 = min(r1ys), max(r1ys)
+        r2_x0, r2_x1 = min(r2xs), max(r2xs)
+        r2_y0, r2_y1 = min(r2ys), max(r2ys)
+
+        # Shared vertical edge (same x, overlapping y)
+        if abs(r1_x1 - r2_x0) < tol or abs(r2_x1 - r1_x0) < tol:
+            overlap_y = min(r1_y1, r2_y1) - max(r1_y0, r2_y0)
+            if overlap_y > 0.5:
+                return True
+
+        # Shared horizontal edge (same y, overlapping x)
+        if abs(r1_y1 - r2_y0) < tol or abs(r2_y1 - r1_y0) < tol:
+            overlap_x = min(r1_x1, r2_x1) - max(r1_x0, r2_x0)
+            if overlap_x > 0.5:
+                return True
+
+        return False
+
+    def test_no_room_is_a_floating_island(self):
+        """Every room must share at least one edge with another room."""
+        best = get_best("800 sqft, 2 bedrooms, kitchen, bathroom")
+        for r in best.rooms:
+            neighbors = [
+                other for other in best.rooms
+                if other.id != r.id and self._shared_edge(r, other)
+            ]
+            assert len(neighbors) >= 1, (
+                f"{r.name} ({r.type}) shares no edges with any other room. "
+                f"It is a floating island -- doors cannot be placed."
+            )
+
+    def test_footprint_has_no_voids(self):
+        """Sum of room areas must cover at least 95% of bounding box."""
+        best = get_best("800 sqft, 2 bedrooms, kitchen, bathroom")
+        all_xs = [p[0] for r in best.rooms for p in r.polygon]
+        all_ys = [p[1] for r in best.rooms for p in r.polygon]
+        bbox_area = (max(all_xs) - min(all_xs)) * (max(all_ys) - min(all_ys))
+        room_area = sum(r.area_sqm for r in best.rooms)
+        coverage = room_area / bbox_area
+        assert coverage >= 0.95, (
+            f"Rooms cover only {coverage:.0%} of bounding box. "
+            f"Room area: {room_area:.1f} sqm, bbox: {bbox_area:.1f} sqm. "
+            f"There are unassigned voids in the plan."
+        )
+
+    def test_corridor_touches_all_private_rooms(self):
+        """Corridor must share an edge with every bedroom and bathroom."""
+        best = get_best("800 sqft, 2 bedrooms, kitchen, bathroom")
+        rbt = rooms_by_type(best)
+        corridors = rbt.get("corridor", [])
+        if not corridors:
+            pytest.skip("No corridor in this plan")
+        corridor = corridors[0]
+        private_rooms = rbt.get("bedroom", []) + rbt.get("bathroom", [])
+        for r in private_rooms:
+            assert self._shared_edge(corridor, r), (
+                f"Corridor does not touch {r.name} ({r.type}). "
+                f"Corridor: {corridor.polygon[:2]}. "
+                f"Room: {r.polygon[:2]}. "
+                f"Doors cannot be placed without a shared wall."
+            )
+
+    def test_minimum_doors_per_room_count(self):
+        """Must have at least N-1 doors where N is number of enclosed rooms."""
+        best = get_best("800 sqft, 2 bedrooms, kitchen, bathroom")
+        enclosed = [r for r in best.rooms if r.type != "living"]
+        n_doors = len(best.openings.get("doors", []))
+        min_doors = len(enclosed) - 1
+        assert n_doors >= min_doors, (
+            f"Only {n_doors} doors for {len(best.rooms)} rooms. "
+            f"Minimum needed: {min_doors}. "
+            f"Some rooms have no access."
+        )
