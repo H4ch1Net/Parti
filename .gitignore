@@ -1,0 +1,29 @@
+# Python
+__pycache__/
+*.py[cod]
+*.so
+.venv/
+venv/
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Node
+node_modules/
+frontend/node_modules/
+frontend/dist/
+
+# Build outputs
+backend/.mypy_cache/
+backend/.ruff_cache/
+backend/outputs/
+*.log
+
+# IDE
+.vscode/
+.idea/
+.DS_Store
+
+# Generated exports
+exports/
+examples/generated/

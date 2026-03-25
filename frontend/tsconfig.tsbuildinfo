@@ -1,0 +1,1 @@
+{"root":["./src/App.tsx","./src/main.tsx","./src/api/client.ts","./src/components/CandidateList.tsx","./src/components/ScheduleTable.tsx","./src/components/ScorePanel.tsx","./src/components/SvgViewer.tsx","./src/types/planner.ts"],"version":"5.9.3"}
