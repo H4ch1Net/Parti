@@ -10,8 +10,8 @@ AREA_RATIOS = {
     "dining": 0.1,
     "bedroom": 0.15,
     "bathroom": 0.06,
-    "corridor": 0.1,
-    "entry": 0.05,
+    "corridor": 0.06,
+    "entry": 0.03,
     "studio": 0.45,
     "private_office": 0.11,
     "open_office": 0.2,
@@ -138,6 +138,8 @@ def build_program(brief: StructuredBrief) -> ProgramOutput:
     for rr in brief.rooms:
         share = AREA_RATIOS.get(rr.type, 0.07)
         per_room_target = max(MIN_AREA.get(rr.type, 3.0), target * (share / weighted_sum))
+        if rr.type == "entry":
+            per_room_target = min(3.5, per_room_target)
         for i in range(rr.count):
             rid = f"{rr.type}_{i + 1}"
             room_types[rid] = rr.type

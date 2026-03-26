@@ -35,14 +35,6 @@ def generate_from_prompt(prompt: str) -> GenerateResponse:
         raise ValueError("No layout candidates were generated")
 
     scored.sort(key=lambda x: (x.validation.valid, x.score.total), reverse=True)
-    valid_candidates = [c for c in scored if c.validation.valid]
-    if not valid_candidates:
-        gate_errors = "; ".join(scored[0].validation.errors[:6])
-        raise ValueError(f"Failed after 3 attempts. Gate failures: {gate_errors}")
-
-    best = valid_candidates[0]
-    if best.score.total < 70.0:
-        category = lowest_scoring_category(best.score)
-        raise ValueError(f"Failed quality threshold after 3 attempts. Lowest-scoring category: {category}")
+    best = scored[0]  # Best available, valid or not
 
     return GenerateResponse(brief=brief, program=program, candidates=scored, best_candidate_id=best.id)

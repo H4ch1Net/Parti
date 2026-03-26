@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import math
 
-from shapely.geometry import Polygon
+from shapely.geometry import LineString, Polygon
 
 from app.models.schemas import DoorGeometry, LayoutCandidate, WindowGeometry
 
@@ -28,21 +28,71 @@ def _poly(room) -> Polygon:
 
 def _shared_segment(pa: Polygon, pb: Polygon) -> list[list[float]] | None:
     shared = pa.boundary.intersection(pb.boundary)
-    if shared.is_empty:
-        return None
-    if shared.geom_type == "LineString" and shared.length > 0.65:
-        a = shared.coords[0]
-        b = shared.coords[-1]
-        return [[round(a[0], 3), round(a[1], 3)], [round(b[0], 3), round(b[1], 3)]]
-    if shared.geom_type == "MultiLineString":
-        lines = [ln for ln in shared.geoms if ln.length > 0.65]
-        if not lines:
-            return None
-        ln = max(lines, key=lambda l: l.length)
-        a = ln.coords[0]
-        b = ln.coords[-1]
-        return [[round(a[0], 3), round(a[1], 3)], [round(b[0], 3), round(b[1], 3)]]
-    return None
+    if not shared.is_empty:
+        if shared.geom_type == "LineString" and shared.length > 0.65:
+            a = shared.coords[0]
+            b = shared.coords[-1]
+            return [[round(a[0], 3), round(a[1], 3)], [round(b[0], 3), round(b[1], 3)]]
+        if shared.geom_type == "MultiLineString":
+            lines = [ln for ln in shared.geoms if ln.length > 0.65]
+            if lines:
+                ln = max(lines, key=lambda l: l.length)
+                a = ln.coords[0]
+                b = ln.coords[-1]
+                return [[round(a[0], 3), round(a[1], 3)], [round(b[0], 3), round(b[1], 3)]]
+
+    # Fallback: find closest parallel edges within 0.15m proximity
+    tolerance = 0.15
+    a_coords = list(pa.exterior.coords)
+    b_coords = list(pb.exterior.coords)
+    best_seg = None
+    best_overlap = 0.0
+
+    for ac in [a_coords]:
+        for i in range(len(ac) - 1):
+            seg_a = LineString([ac[i], ac[i + 1]])
+            if seg_a.length < 0.65:
+                continue
+            for bc in [b_coords]:
+                for j in range(len(bc) - 1):
+                    seg_b = LineString([bc[j], bc[j + 1]])
+                    if seg_b.length < 0.65:
+                        continue
+                    if seg_a.distance(seg_b) > tolerance:
+                        continue
+                    # Check if segments are parallel (same direction)
+                    dx_a = ac[i + 1][0] - ac[i][0]
+                    dy_a = ac[i + 1][1] - ac[i][1]
+                    dx_b = bc[j + 1][0] - bc[j][0]
+                    dy_b = bc[j + 1][1] - bc[j][1]
+                    cross = abs(dx_a * dy_b - dy_a * dx_b)
+                    dot = abs(dx_a * dx_b + dy_a * dy_b)
+                    if cross > 0.01 * max(dot, 0.001):
+                        continue
+                    # Project overlap along the shared direction
+                    la = seg_a.length
+                    if la < 0.001:
+                        continue
+                    ux = dx_a / la
+                    uy = dy_a / la
+                    projs_a = sorted([0.0, la])
+                    p0_b = ux * (bc[j][0] - ac[i][0]) + uy * (bc[j][1] - ac[i][1])
+                    p1_b = ux * (bc[j + 1][0] - ac[i][0]) + uy * (bc[j + 1][1] - ac[i][1])
+                    lo = max(projs_a[0], min(p0_b, p1_b))
+                    hi = min(projs_a[1], max(p0_b, p1_b))
+                    overlap = hi - lo
+                    if overlap > best_overlap and overlap > 0.65:
+                        mid_x = ac[i][0] + ux * lo
+                        mid_y = ac[i][1] + uy * lo
+                        end_x = ac[i][0] + ux * hi
+                        end_y = ac[i][1] + uy * hi
+                        best_seg = [
+                            [round(mid_x, 3), round(mid_y, 3)],
+                            [round(end_x, 3), round(end_y, 3)],
+                        ]
+                        best_overlap = overlap
+
+    return best_seg
 
 
 def _door_geom(segment: list[list[float]], width: float, into_poly: Polygon) -> tuple[list[float], list[float]]:
