@@ -93,7 +93,7 @@ def validate_candidate(
 
     total_area = sum(r.area_sqm for r in candidate.rooms)
     if target_area_sqm:
-        if abs(total_area - target_area_sqm) > target_area_sqm * 0.20:
+        if abs(total_area - target_area_sqm) > target_area_sqm * 0.15:
             errors.append("GATE 2 DIMENSIONS: total area outside 10% budget")
 
     # Gate 3: Doors

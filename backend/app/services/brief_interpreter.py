@@ -124,7 +124,8 @@ def _normalize_counts(text: str) -> dict[str, int]:
     if btype == "residential":
         if counts["bedroom"] == 0 and counts["studio"] == 0:
             counts["bedroom"] = 1
-        counts["living"] = max(1, counts["living"])
+        if counts["studio"] == 0:
+            counts["living"] = max(1, counts["living"])
         counts["kitchen"] = max(1, counts["kitchen"])
         counts["bathroom"] = max(1, counts["bathroom"])
         counts["entry"] = max(1, counts["entry"])
