@@ -1,76 +1,88 @@
-# Architect Planner
+# Parti
 
-Architect Planner is a production-oriented AI-assisted architectural layout engine that converts natural-language briefs into structured, editable, architect-style schematic floor plans.
+**Work in progress.** The layout generator is functional but output quality is inconsistent. Expect broken plans, weird room proportions, and results that don't match the brief well. This is being actively worked on.
 
-## Features
+Parti is an AI-assisted architectural floor plan generator. You give it a natural language brief and it tries to produce a schematic layout with rooms, walls, doors, windows, and furniture proxies.
 
-- Natural-language architectural brief interpretation
-- Program generation with room schedule, zoning, and adjacency targets
-- Multi-candidate layout generation (grid, slicing, adjacency-aware)
-- Geometry refinement and topology cleanup
-- Door and window placement with symbolic drafting
-- Furniture-aware usability evaluation
-- Multi-factor scoring and ranking
-- Validation engine for architectural plausibility
-- Exports: JSON, SVG, PDF, DXF, PNG preview
-- Secondary parser for image/PDF plans
-- React frontend for interactive generation and review
+## Stack
 
-## Monorepo Structure
+- **Backend:** FastAPI + Python (planning pipeline, exports)
+- **Frontend:** React + TypeScript (viewer, candidate browser)
 
-- `backend/`: FastAPI service and planning engines
-- `frontend/`: React + TypeScript UI
-- `examples/`: sample generated outputs
-- `docs/`: architecture and API notes
+## Pipeline
 
-## Quick Start (Docker)
+Brief text goes through a chain of engines:
+
+1. Brief interpreter (NL to structured program)
+2. Program generator (room schedule, areas, adjacency targets)
+3. Zoning engine
+4. Layout generator (multi-candidate, grid/slicing)
+5. Geometry refiner
+6. Openings engine (doors, windows)
+7. Furniture evaluator
+8. Validation + scoring
+9. Export (SVG, PDF, DXF, PNG, JSON)
+
+## Running
+
+### Docker (recommended)
 
 ```bash
 docker compose up --build
 ```
 
-Backend: http://localhost:8000/docs  
-Frontend: http://localhost:5173
+- Backend API + docs: `http://localhost:8000/docs`
+- Frontend: `http://localhost:5173`
 
-## Local Development
-
-### Backend
+### Local
 
 ```bash
+# Backend
 cd backend
 python3.11 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
 uvicorn app.main:app --reload --port 8000
-```
 
-### Frontend
-
-```bash
+# Frontend
 cd frontend
 npm install
 npm run dev -- --host --port 5173
 ```
 
-## Example Prompt
+## API
 
-- "Make a floor plan for 2 bedrooms, kitchen, bathroom. 800 sqft"
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/api/generate` | Generate floor plan from text prompt |
+| POST | `/api/parse` | Parse an uploaded image/PDF plan |
+| POST | `/api/validate` | Validate a candidate plan |
+| POST | `/api/export/svg` | Export candidate as SVG |
+| POST | `/api/export/pdf` | Export candidate as PDF |
+| POST | `/api/export/dxf` | Export candidate as DXF |
+| POST | `/api/export/png` | Export candidate as PNG |
+| GET | `/api/examples` | Get example prompts |
 
-## API Endpoints
+Example prompt: `"Make a floor plan for 2 bedrooms, kitchen, bathroom. 800 sqft"`
 
-- `POST /api/generate`
-- `POST /api/parse`
-- `POST /api/validate`
-- `POST /api/export/svg`
-- `POST /api/export/pdf`
-- `POST /api/export/dxf`
-- `GET /api/examples`
-
-## Testing
+## Tests
 
 ```bash
 cd backend
 pytest
 ```
 
-Includes a golden test for: `800 sqft, 2 bedrooms, kitchen, bathroom`.
+## Status
+
+| Component | State |
+|-----------|-------|
+| Brief interpreter | Working |
+| Program / zoning | Working |
+| Layout generation | Inconsistent |
+| Geometry refinement | Partial |
+| Openings placement | Working |
+| Furniture evaluation | Working |
+| Scoring / validation | Working |
+| Exports (SVG, PDF, DXF) | Working |
+| Frontend viewer | Working |
+| Parser (image/PDF input) | Stub |
