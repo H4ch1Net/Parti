@@ -281,9 +281,9 @@ def _orderings(rooms: list[ProgramRoom], role: str, k: int, start_bias: bool, en
 # --------------------------------------------------------------- stacking ----
 
 # Small rooms can share one column of a band: the piece that needs an
-# outside wall (entry, ensuite, laundry) sits on the facade side and the
+# outside wall (entry, ensuite) sits on the facade side and the
 # piece reached from the hall sits on the hall side.
-EXT_PIECES = {"entry", "ensuite", "laundry"}
+EXT_PIECES = {"entry", "ensuite"}
 HALL_PIECES = {"powder", "storage", "bathroom", "laundry"}
 STACK_MAX_AREA = 7.5
 

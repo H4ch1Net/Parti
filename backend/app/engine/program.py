@@ -83,7 +83,9 @@ def _assign_floors(rooms: list[ProgramRoom], stories: int, commercial: bool, bas
             r.floor = upper[-1] if r.primary or r.type == "ensuite" else upper[i % len(upper)]
 
     def load(fl: int) -> float:
-        return sum(base[r.id] for r in rooms if r.floor == fl)
+        level = [r for r in rooms if r.floor == fl]
+        hall = HALL_SHARE * sum(base[r.id] for r in rooms) / stories if _needs_hall(level) else 0.0
+        return sum(base[r.id] for r in level) + hall
 
     # Rebalance so every level has a similar footprint: move flexible rooms
     # from the heaviest level to the lightest while that reduces the spread.
@@ -158,7 +160,10 @@ def build_program(brief: StructuredBrief) -> Program:
             )
 
     base = {r.id: _base_area(r, max(1, cars)) for r in rooms}
-    _assign_floors(rooms, brief.stories, commercial, base)
+    # Balance levels on sizes scaled to the brief: the garage stays fixed
+    # while bedrooms grow with the house.
+    _scale_targets(rooms, base, brief.target_area_sqm * (1 - HALL_SHARE))
+    _assign_floors(rooms, brief.stories, commercial, {r.id: r.target_area_sqm for r in rooms})
 
     per_floor_total = brief.target_area_sqm / brief.stories
     for fl in range(1, brief.stories + 1):

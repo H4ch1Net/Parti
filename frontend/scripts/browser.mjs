@@ -17,5 +17,6 @@ export async function generateFrom(page, prompt) {
   await page.keyboard.press('Control+Enter')
   await page.waitForSelector('.canvas-busy', { state: 'detached', timeout: 30000 }).catch(() => {})
   await page.waitForSelector('.variant')
+  await page.locator('textarea').blur()
   await page.waitForTimeout(500)
 }

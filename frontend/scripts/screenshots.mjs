@@ -33,7 +33,7 @@ await shot('inspector-dark', {
   },
 })
 await shot('two-levels', {
-  prompt: 'Two story house, 1800 sqft, 3 bedrooms upstairs, living, kitchen and dining downstairs',
+  prompt: 'Two-storey house, 2,600 sq ft: 4 bedrooms, study, master ensuite, laundry and a 2-car garage',
   setup: async (page) => {
     await page.keyboard.press('2')
     await page.click('#tab-checks')
@@ -53,7 +53,7 @@ const api = BASE_URL.replace(/\/$/, '')
 const gen = await fetch(`${api}/api/generate`, {
   method: 'POST',
   headers: { 'Content-Type': 'application/json' },
-  body: JSON.stringify({ prompt: '4 bedroom 2.5 bathroom house, 2000 sqft, master ensuite', count: 1 }),
+  body: JSON.stringify({ prompt: 'Three bedroom home with a home office, laundry and a 2-car garage, 1,650 sq ft', count: 1 }),
 }).then((r) => r.json())
 const png = await fetch(`${api}/api/export/png`, {
   method: 'POST',

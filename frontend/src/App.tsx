@@ -313,7 +313,7 @@ export default function App() {
               </div>
             )}
 
-            {candidate && (
+            {candidate && !selectedRoom && (
               <ul className="legend" aria-label="Zone colours">
                 {(['public', 'private', 'service', 'circulation'] as const).map((z) => (
                   <li key={z}>

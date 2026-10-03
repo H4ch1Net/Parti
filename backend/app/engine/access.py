@@ -132,7 +132,8 @@ def link_cost(server: PlacedRoom, target: PlacedRoom) -> float | None:
     if cost is None:
         return None
     if target.room.type == "ensuite":
-        return 0.5 if server.room.primary else 2.0
+        # The program always marks a primary bedroom when there is an ensuite.
+        return 0.5 if server.room.primary else None
     return cost
 
 
