@@ -364,8 +364,8 @@ def _label_anchor(room: Box, bw: float, bh: float, vertical: bool, obstacles: li
     return best[1], best[2]
 
 
-def _label_size(text: str, avail: float, base: float) -> float:
-    return max(0.11, min(base, avail * 0.92 / max(1, len(text) * 0.56)))
+def _label_size(text: str, avail: float, base: float, char_w: float = 0.56) -> float:
+    return max(0.11, min(base, avail * 0.88 / max(1, len(text) * char_w)))
 
 
 def build_sheet(c: Candidate, level: int, units: str = "both", annotate: bool = True, title: str | None = None) -> Sheet:
@@ -433,7 +433,7 @@ def build_sheet(c: Candidate, level: int, units: str = "both", annotate: bool = 
         vertical = b.w < 1.6 and b.h > b.w * 1.8
         avail = b.h if vertical else b.w
         name = r.name.upper()
-        size = _label_size(name, avail, 0.24)
+        size = _label_size(name, avail, 0.24, char_w=0.72)  # bold capitals with tracking
         small = min(size * 0.82, 0.2)
         area_m, area_i = fmt.area(r.area_sqm, "metric"), fmt.area(r.area_sqm, "imperial")
         dim_m, dim_i = fmt.dims(r.width_m, r.depth_m, "metric"), fmt.dims(r.width_m, r.depth_m, "imperial")
@@ -446,7 +446,7 @@ def build_sheet(c: Candidate, level: int, units: str = "both", annotate: bool = 
         if show_dims:
             m, i = _txt(units, dim_m, dim_i)
             lines.append((m, i, small * 0.9, "label-dim"))
-        block_w = max(len(t) * sz * 0.6 for t, _, sz, _ in lines)
+        block_w = max(len(t) * sz * (0.72 if cls == "label-name" else 0.6) for t, _, sz, cls in lines)
         block_h = sum(sz * 1.25 for _, _, sz, _ in lines)
         cx, cy = _label_anchor(b, block_w, block_h, vertical, furniture_boxes.get(r.id, []))
         acc = 0.0

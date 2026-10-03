@@ -12,11 +12,11 @@ from collections import defaultdict, deque
 
 from app.core.geometry import Box, shared_edge
 from app.engine.furniture import REQUIRED
-from app.engine.rooms import SPECS, min_side
+from app.engine.rooms import GARAGE_DEPTH, SPECS, garage_fits, min_side
 from app.engine.windows import glazing_ratio
 from app.models.schemas import Candidate, Issue, Room, ValidationReport
 
-CRITICAL_FIXTURES = {"kitchen", "bathroom", "ensuite", "powder", "bedroom", "studio"}
+CRITICAL_FIXTURES = {"kitchen", "bathroom", "ensuite", "powder", "bedroom", "studio", "garage"}
 PUBLIC_ROOMS = {"living", "dining", "kitchen", "studio"}
 
 
@@ -103,6 +103,14 @@ def validate_candidate(
         need = min_side(r.type, r.primary)
         if b.short + 0.01 < need:
             add("error", "dims.min_width", f"{r.name} is {b.short:.2f} m wide; needs at least {need:.1f} m", r.id)
+        if r.type == "garage" and not garage_fits(b.w, b.h, r.capacity):
+            cars = max(1, r.capacity)
+            add(
+                "error",
+                "dims.garage",
+                f"{r.name} ({b.w:.1f} × {b.h:.1f} m) cannot park {cars} car{'s' if cars > 1 else ''}; it needs {GARAGE_DEPTH} m of depth",
+                r.id,
+            )
         limit = SPECS[r.type].max_aspect
         if b.aspect > limit + 0.01:
             add("warning", "dims.aspect", f"{r.name} is long and narrow (1:{b.aspect:.1f})", r.id)

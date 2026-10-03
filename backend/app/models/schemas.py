@@ -87,6 +87,7 @@ class ProgramRoom(BaseModel):
     target_area_sqm: float
     min_area_sqm: float
     primary: bool = False
+    capacity: int = Field(default=0, description="Car spaces, for garages")
 
 
 class AdjacencyPreference(BaseModel):
@@ -117,6 +118,7 @@ class Room(BaseModel):
     area_sqm: float
     target_area_sqm: float
     primary: bool = False
+    capacity: int = 0
 
 
 class Wall(BaseModel):

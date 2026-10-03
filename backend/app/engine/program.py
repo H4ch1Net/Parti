@@ -153,6 +153,7 @@ def build_program(brief: StructuredBrief) -> Program:
                     target_area_sqm=0.0,
                     min_area_sqm=max(spec.min_area, 18.0 + 14.0 * (cars - 1)) if req.type == "garage" else spec.min_area,
                     primary=is_primary,
+                    capacity=cars if req.type == "garage" else 0,
                 )
             )
 
@@ -202,3 +203,22 @@ def build_program(brief: StructuredBrief) -> Program:
                 adjacency.append(AdjacencyPreference(a=a.id, b=b.id, weight=w))
 
     return Program(target_area_sqm=brief.target_area_sqm, stories=brief.stories, rooms=rooms, adjacency=adjacency)
+
+
+def minimum_area(brief: StructuredBrief) -> float:
+    """Smallest total area that can hold the brief's rooms at usable sizes."""
+    total = 0.0
+    for req in brief.rooms:
+        if req.count <= 0 or req.type in {"corridor", "stair"}:
+            continue
+        spec = SPECS[req.type]
+        if req.type == "garage":
+            total += 18.0 + 14.0 * (req.count - 1)
+        else:
+            total += max(spec.min_area, spec.min_side**2) * req.count
+    leaves = sum(r.count for r in brief.rooms if r.count > 0 and not SPECS[r.type].serves and r.type not in {"ensuite", "garage"})
+    if leaves >= 2:
+        total += 4.0 * brief.stories
+    if brief.stories > 1:
+        total += STAIR_AREA * brief.stories
+    return round(total * 1.2, 1)

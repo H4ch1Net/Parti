@@ -10,7 +10,7 @@ from app.engine.access import plan_access
 from app.engine.brief import interpret_brief
 from app.engine.furniture import furnish
 from app.engine.layout import Layout, layout_candidates
-from app.engine.program import build_program
+from app.engine.program import build_program, minimum_area
 from app.engine.scoring import score_candidate
 from app.engine.validation import validate_candidate
 from app.engine.walls import build_walls
@@ -49,6 +49,7 @@ def _assemble(layout: Layout, brief: StructuredBrief, fixtures: list[Fixture] | 
             area_sqm=round(p.box.area, 2),
             target_area_sqm=p.room.target_area_sqm,
             primary=p.room.primary,
+            capacity=p.room.capacity,
         )
         for p in layout.rooms
     ]
@@ -85,8 +86,41 @@ def _rank_key(c: Candidate) -> tuple:
     return (errors, -c.score.total)
 
 
+def _with_area(brief: StructuredBrief, area: float, reason: str) -> StructuredBrief:
+    note = f"Area raised to {area:.0f} m² ({area * 10.7639:,.0f} ft²): {reason}"
+    notes = [n for n in brief.notes if not n.startswith("Area raised")]
+    return brief.model_copy(update={"target_area_sqm": round(area, 1), "notes": [*notes, note]})
+
+
 def generate(brief: StructuredBrief, count: int = 6) -> GenerateResponse:
     started = time.perf_counter()
+    requested = brief.target_area_sqm
+    floor_area = minimum_area(brief)
+    if requested < floor_area:
+        brief = _with_area(brief, floor_area, f"{requested:.0f} m² is too small for these rooms")
+    # If nothing valid fits, give the program a little more room and retry.
+    for attempt in range(3):
+        program, chosen, n_layouts = _generate_once(brief, count)
+        if chosen[0].validation.valid or attempt == 2 or brief.target_area_sqm * 1.12 > 1500:
+            break
+        brief = _with_area(brief, brief.target_area_sqm * 1.12, f"no valid layout fit {brief.target_area_sqm:.0f} m²")
+
+    for i, cand in enumerate(chosen):
+        letter = ascii_uppercase[i]
+        cand.id = f"variant-{letter.lower()}"
+        cand.label = f"Variant {letter}"
+    elapsed = int((time.perf_counter() - started) * 1000)
+    log.info("generated %d candidates from %d layouts in %d ms", len(chosen), n_layouts, elapsed)
+    return GenerateResponse(
+        brief=brief,
+        program=program,
+        candidates=chosen,
+        best_candidate_id=chosen[0].id,
+        elapsed_ms=elapsed,
+    )
+
+
+def _generate_once(brief: StructuredBrief, count: int) -> tuple[Program, list[Candidate], int]:
     program = build_program(brief)
     layouts = layout_candidates(program, brief.building_type)
 
@@ -151,20 +185,7 @@ def generate(brief: StructuredBrief, count: int = 6) -> GenerateResponse:
 
     if not chosen:
         raise ValueError("No layout could be generated for this brief")
-    for i, cand in enumerate(chosen):
-        letter = ascii_uppercase[i]
-        cand.id = f"variant-{letter.lower()}"
-        cand.label = f"Variant {letter}"
-
-    elapsed = int((time.perf_counter() - started) * 1000)
-    log.info("generated %d candidates from %d layouts in %d ms", len(chosen), len(layouts), elapsed)
-    return GenerateResponse(
-        brief=brief,
-        program=program,
-        candidates=chosen,
-        best_candidate_id=chosen[0].id,
-        elapsed_ms=elapsed,
-    )
+    return program, chosen, len(layouts)
 
 
 def generate_from_prompt(prompt: str, count: int = 6) -> GenerateResponse:

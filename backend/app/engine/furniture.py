@@ -536,17 +536,18 @@ def _reception(ctx: RoomCtx) -> None:
 
 def _garage(ctx: RoomCtx) -> None:
     c = ctx.clear
-    cars = 3 if "3-car" in ctx.room.room.name else 2 if "2-car" in ctx.room.room.name else 1
+    cars = max(1, ctx.room.room.capacity)
     # Cars park nose-in, perpendicular to the garage door.
     along_x = (ctx.garage_side in ("s", "n")) if ctx.garage_side else c.w < c.h
     total = cars * 1.9 + (cars - 1) * 0.6
+    length = 4.6  # a mid-size car; the garage must hold it with a walkway
     for i in range(cars):
         if along_x:
             x = c.x + (c.w - total) / 2 + i * 2.5
-            box = Box(x, c.y + 0.3, 1.9, min(4.7, c.h - 0.6))
+            box = Box(x, c.y + 0.25, 1.9, length)
         else:
             y = c.y + (c.h - total) / 2 + i * 2.5
-            box = Box(c.x + 0.3, y, min(4.7, c.w - 0.6), 1.9)
+            box = Box(c.x + 0.25, y, length, 1.9)
         if ctx.clear.contains(box):
             _add(ctx, box, "car", "s" if along_x else "w")
 

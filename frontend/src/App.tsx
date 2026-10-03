@@ -74,7 +74,8 @@ export default function App() {
       try {
         const res = await generate(b ? { brief: b } : { prompt }, ac.signal)
         setResult(res)
-        if (!b) setBrief(res.brief)
+        // The server may adjust the brief (e.g. raise an infeasible area); show what was used.
+        setBrief(res.brief)
         setInterpretError(null)
         setSelectedId(res.best_candidate_id)
         setFloor(1)
@@ -215,7 +216,8 @@ export default function App() {
           units={units}
           onPromptChange={setPrompt}
           onBriefChange={(b) => {
-            setBrief(b)
+            // Interpreter notes describe the text, not a hand-edited program.
+            setBrief({ ...b, notes: [] })
             setBriefEdited(true)
           }}
           onResetBrief={() => setRereadToken((n) => n + 1)}

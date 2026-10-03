@@ -20,14 +20,14 @@ from itertools import combinations, permutations
 
 from app.core.geometry import Box, r3, shared_edge
 from app.engine.program import ADJACENCY
-from app.engine.rooms import SPECS, min_side
+from app.engine.rooms import SPECS, garage_fits, min_side
 from app.models.schemas import Program, ProgramRoom
 
 GRID = 0.3  # planning grid in metres; every wall lands on it
 HALL_UNITS = 4  # 1.2 m clear hall
 WIDE_HALL_UNITS = 5  # 1.5 m for larger commercial floors
 STAIR_UNITS = 4  # 1.2 m wide straight-run stair
-ASPECTS = (0.9, 1.15, 1.4, 1.7, 2.05)
+ASPECTS = (0.9, 1.15, 1.4, 1.7, 2.05, 2.4)
 
 
 # ------------------------------------------------------------ tree types ----
@@ -89,8 +89,13 @@ GARAGE_DEPTH_UNITS = 18  # 5.4 m: a car parked nose-in plus a walkway
 def _leaf_min(room: ProgramRoom, cross: int | None, axis: str) -> int:
     spec = SPECS[room.type]
     units = math.ceil(min_side(room.type, room.primary) / GRID - 1e-9)
-    if room.type == "garage" and axis == "y":
-        units = max(units, GARAGE_DEPTH_UNITS)
+    if room.type == "garage":
+        if axis == "y":
+            units = max(units, GARAGE_DEPTH_UNITS)
+        else:
+            # Cars side by side: 2.5 m per space plus 0.6 m between them.
+            cars = max(1, room.capacity)
+            units = max(units, math.ceil((2.5 * cars + 0.6 * (cars - 1) + 0.4) / GRID - 1e-9))
     if cross:
         limit = min(spec.max_aspect, 2.4)
         units = max(units, math.ceil(cross / limit - 1e-9))
@@ -434,7 +439,11 @@ def _end_choices(back: list[ProgramRoom], has_hall: bool, stair: ProgramRoom | N
         key=lambda r: (not r.primary, -r.target_area_sqm),
     )
     out = []
+    garage = next((r for r in back if r.type == "garage"), None)
     if stair is not None:
+        if garage is not None:
+            # A rear garage spans the full back depth at the far end.
+            return [(stair, garage, "stair+garage")]
         out.append((stair, None, "stair"))
         if has_hall and big:
             out.append((stair, big[0], "stair+end"))
@@ -498,6 +507,8 @@ def _quick_penalty(placed: list[PlacedRoom], width: float, depth: float) -> floa
         pen += max(0.0, min_side(p.room.type, p.room.primary) - b.short) * 20
         if p.room.target_area_sqm > 0 and p.room.type != "corridor":
             pen += abs(b.area - p.room.target_area_sqm) / p.room.target_area_sqm
+        if p.room.type == "garage" and not garage_fits(b.w, b.h, p.room.capacity):
+            pen += 40
         if spec.habitable and not (b.x < 1e-4 or b.y < 1e-4 or abs(b.x1 - width) < 1e-4 or abs(b.y1 - depth) < 1e-4):
             pen += 30
         if not spec.serves and p.room.type not in {"ensuite", "garage"}:
@@ -522,7 +533,7 @@ class _Collector:
         self.by_key: dict[tuple, list[tuple[float, Layout]]] = {}
 
     def add(self, layout: Layout) -> None:
-        pen = _quick_penalty(layout.rooms, layout.width, layout.depth) + (0 if layout.feasible else 25)
+        pen = _quick_penalty(layout.rooms, layout.width, layout.depth) + (0 if layout.feasible else 40)
         bucket = self.by_key.setdefault(layout.key, [])
         bucket.append((pen, layout))
         bucket.sort(key=lambda t: t[0])
@@ -561,6 +572,7 @@ def layout_candidates(program: Program, building_type: str, limit: int = 160) ->
                                 for w, d in footprints:
                                     placed, ok = solve(tree, w, d)
                                     found.add(Layout("Split plan" if hall else "Open plan", key, r3(w * GRID), r3(d * GRID), placed, ok))
+        _garage_candidates(rooms, hall, hall_units, footprints, found)
         _wing_candidates(rooms, hall, hall_units, footprints, found)
         return found.best(limit)
 
@@ -571,6 +583,12 @@ def layout_candidates(program: Program, building_type: str, limit: int = 160) ->
     g_hall = next((r for r in ground if r.type == "corridor"), None)
     g_stair = next(r for r in ground if r.type == "stair")
     g_assigns = sorted(_band_assignments(ground), key=lambda fb: _balance_penalty(*fb))[:4]
+    # A street-front garage would force a deep front band on every level
+    # (the stair pins band depths), so also try it at the rear.
+    for front, back in list(g_assigns):
+        garage = next((r for r in front if r.type == "garage"), None)
+        if garage is not None and len(front) > 2:
+            g_assigns.append(([r for r in front if r is not garage], back + [garage]))
     uppers = []
     for lv in levels[1:]:
         lv_rooms = [r for r in program.rooms if r.floor == lv]
@@ -677,3 +695,31 @@ def _wing_candidates(rooms, hall, hall_units, footprints, found: _Collector) -> 
                         for w, d in footprints:
                             placed, ok = solve(tree, w, d)
                             found.add(Layout("Wing plan", key, r3(w * GRID), r3(d * GRID), placed, ok))
+
+
+def _garage_candidates(rooms, hall, hall_units, footprints, found: _Collector) -> None:
+    """Garage as a full-depth end column, with laundry or storage behind it."""
+    garage = next((r for r in rooms if r.type == "garage"), None)
+    if garage is None:
+        return
+    partners = [r for r in rooms if r.type in {"laundry", "storage"}]
+    rest = [r for r in rooms if r is not garage]
+    for partner in [None, *partners[:1]]:
+        others = [r for r in rest if r is not partner]
+        column: Node = Split("y", [Leaf(garage), Leaf(partner)]) if partner else Leaf(garage)
+        assigns = sorted(_band_assignments(others), key=lambda fb: _balance_penalty(*fb))[:3]
+        for ai, (front, back) in enumerate(assigns):
+            for end_l, end_r, mode in _end_choices(back, hall is not None, None):
+                middle = [r for r in back if r is not end_l and r is not end_r]
+                for fo in orderings(front, "front", 2, hall is not None and end_l is None):
+                    for bo in orderings(middle, "back", 1, ends=(end_l, end_r)):
+                        for fi in stack_variants(fo)[:2]:
+                            body = _band_tree(fi, _stack_adjacent(bo), end_l, end_r, hall, hall_units)
+                            if body is None:
+                                continue
+                            for garage_left in (True, False):
+                                tree = Split("x", [column, body] if garage_left else [body, column])
+                                key = ("garage", ai, mode, garage_left, partner.id if partner else None, _sig(fi))
+                                for w, d in footprints:
+                                    placed, ok = solve(tree, w, d)
+                                    found.add(Layout("Split plan", key, r3(w * GRID), r3(d * GRID), placed, ok))

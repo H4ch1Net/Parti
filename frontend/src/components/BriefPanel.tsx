@@ -99,7 +99,7 @@ export function BriefPanel(p: Props) {
                 </li>
               ))}
             </ul>
-            {b.notes.length > 0 && !p.briefEdited && (
+            {b.notes.length > 0 && (
               <ul className="notes">
                 {b.notes.map((n) => (
                   <li key={n}>

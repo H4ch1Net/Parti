@@ -100,3 +100,13 @@ COMMERCIAL_TYPES = [
     "server_room",
     "kitchen",
 ]
+
+
+GARAGE_DEPTH = 5.4  # nose-in parking plus a walkway
+
+
+def garage_fits(width: float, depth: float, cars: int) -> bool:
+    """Whether a garage of this size holds ``cars`` parked side by side."""
+    cars = max(1, cars)
+    across = 2.5 * cars + 0.6 * (cars - 1) + 0.4
+    return (width >= across - 1e-6 and depth >= GARAGE_DEPTH - 1e-6) or (depth >= across - 1e-6 and width >= GARAGE_DEPTH - 1e-6)

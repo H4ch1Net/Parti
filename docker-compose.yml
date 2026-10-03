@@ -1,42 +1,26 @@
-version: '3.9'
+# Development stack with live reload.
+#   docker compose up --build
+# Web app: http://localhost:5173   API docs: http://localhost:8000/docs
 services:
   backend:
-    build:
-      context: ./backend
-    container_name: architect_planner_backend
+    build: ./backend
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
     ports:
       - "8000:8000"
     volumes:
-      - ./backend:/app
-      - ./examples:/app/examples
+      - ./backend/app:/app/app
     environment:
-      - DATABASE_URL=sqlite:///./planner.db
-    depends_on:
-      - db
+      PARTI_CORS_ORIGINS: http://localhost:5173
+      PARTI_LOG_LEVEL: ${PARTI_LOG_LEVEL:-INFO}
 
   frontend:
-    build:
-      context: ./frontend
-    container_name: architect_planner_frontend
+    build: ./frontend
     ports:
       - "5173:5173"
     volumes:
-      - ./frontend:/usr/src/app
-      - /usr/src/app/node_modules
+      - ./frontend/src:/usr/src/app/src
+      - ./frontend/public:/usr/src/app/public
+    environment:
+      PARTI_API_URL: http://backend:8000
     depends_on:
       - backend
-
-  db:
-    image: postgres:16-alpine
-    container_name: architect_planner_db
-    environment:
-      - POSTGRES_USER=planner
-      - POSTGRES_PASSWORD=planner
-      - POSTGRES_DB=architect_planner
-    ports:
-      - "5432:5432"
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-
-volumes:
-  postgres_data:

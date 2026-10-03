@@ -345,7 +345,7 @@ def plan_access(layout: Layout, style: str, commercial: bool) -> AccessPlan:
                 gext = [s for s in exterior_sides(g, layout) if s == "s"] or exterior_sides(g, layout)
                 if gext:
                     seg = side_segment(g.box, gext[0])
-                    cars = 2 if "2" in g.room.name else 3 if "3" in g.room.name else 1
+                    cars = max(1, g.room.capacity)
                     gw = min(seg.length - 0.6, 2.5 * cars + 0.4 * (cars - 1))
                     mid = (seg.lo + seg.hi) / 2
                     a, b = seg.point(mid - gw / 2), seg.point(mid + gw / 2)

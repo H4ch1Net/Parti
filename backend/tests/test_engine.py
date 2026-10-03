@@ -8,7 +8,7 @@ from app.core.geometry import shared_edge
 from app.engine.brief import interpret_brief
 from app.engine.pipeline import generate
 from app.engine.program import build_program
-from app.engine.rooms import SPECS, min_side
+from app.engine.rooms import SPECS, garage_fits, min_side
 from app.engine.validation import reachable_rooms, room_box
 from tests.conftest import best, generated
 
@@ -137,3 +137,44 @@ def test_overconstrained_brief_still_returns_a_plan():
     result = generate(interpret_brief("5 bedroom 3 bathroom house 600 sqft"))
     assert result.candidates
     assert result.candidates[0].rooms
+
+
+@pytest.mark.parametrize(
+    "prompt",
+    [
+        "three bedroom home with a home office and 2-car garage, 1,650 sq ft",
+        "two story house with 2-car garage, 4 bedrooms, 2400 sqft",
+    ],
+)
+def test_garages_hold_their_cars(prompt):
+    plan = best(prompt)
+    assert plan.validation.valid, plan.validation.errors
+    garage = next(r for r in plan.rooms if r.type == "garage")
+    assert garage_fits(garage.width_m, garage.depth_m, garage.capacity)
+    assert sum(1 for f in plan.fixtures if f.room_id == garage.id and f.type == "car") == garage.capacity
+    assert any(d.kind == "garage" for d in plan.doors)
+
+
+def test_undersized_brief_is_enlarged_and_explained():
+    result = generate(interpret_brief("studio apartment 150 sqft"))
+    assert result.brief.target_area_sqm > 14
+    assert any(n.startswith("Area raised") for n in result.brief.notes)
+    assert result.candidates[0].validation.valid
+
+
+@pytest.mark.parametrize(
+    "prompt",
+    [
+        "kitchen",
+        "garage",
+        "100 sqft",
+        "8 bedroom 5 bathroom mansion 6000 sqft",
+        "three story townhouse 2400 sqft 4 bedrooms 3 baths",
+        "open office for 40 people 450 m2",
+        "dentist clinic with reception, 4 offices, 2 restrooms, storage 120 sqm",
+    ],
+)
+def test_unusual_briefs_do_not_crash(prompt):
+    result = generate(interpret_brief(prompt))
+    assert result.candidates
+    assert all(c.rooms for c in result.candidates)
