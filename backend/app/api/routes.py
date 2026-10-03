@@ -1,91 +1,96 @@
 from __future__ import annotations
 
-from pathlib import Path
+from typing import Literal
 
-from fastapi import APIRouter, File, HTTPException, UploadFile
-from fastapi.responses import FileResponse, JSONResponse, Response
+from fastapi import APIRouter, HTTPException
+from fastapi.responses import Response
 
-from app.core.config import OUTPUT_DIR
-from app.models.schemas import BriefRequest, ExportRequest, GenerateResponse, ParseResponse, ValidateRequest
-from app.services.drafting_engine import draft_svg
-from app.services.export_engine import export_dxf, export_pdf, export_pdf_bytes, export_png_preview, export_svg
-from app.services.parser_engine import parse_plan
-from app.services.planner_pipeline import generate_from_prompt
-from app.services.validation_engine import validate_candidate
+from app.drawing.render import app_svgs, export_file
+from app.engine.brief import interpret_brief
+from app.engine.pipeline import generate
+from app.engine.rooms import COMMERCIAL_TYPES, RESIDENTIAL_TYPES, SPECS
+from app.engine.validation import validate_candidate
+from app.models.schemas import (
+    ExportRequest,
+    GenerateRequest,
+    GenerateResponse,
+    InterpretRequest,
+    StructuredBrief,
+    ValidateRequest,
+    ValidationReport,
+)
 
 router = APIRouter(prefix="/api", tags=["planner"])
 
+EXAMPLES = [
+    {"title": "Studio", "prompt": "Studio apartment, 400 sq ft, with a full bathroom"},
+    {"title": "Two-bedroom flat", "prompt": "2 bedroom apartment, 800 sqft, open kitchen and good daylight"},
+    {"title": "Family house", "prompt": "3 bed 2 bath house, 1,300 sq ft, open plan with a dining area"},
+    {"title": "House with garage", "prompt": "Three bedroom home with a home office, laundry and a 2-car garage, 1,650 sq ft"},
+    {"title": "Large house", "prompt": "4 bedroom 2.5 bathroom house, 2000 sqft, master ensuite, privacy for bedrooms"},
+    {"title": "Two storeys", "prompt": "Two story house, 1800 sqft, 3 bedrooms upstairs, living, kitchen and dining downstairs"},
+    {"title": "Small office", "prompt": "Small office, 600 sqft: reception, 3 private offices and a restroom"},
+    {"title": "Team office", "prompt": "Office for 12 people with 2 meeting rooms, a break room and a server room"},
+]
 
-def _ensure_exportable(req: ExportRequest) -> None:
-    c = req.candidate
-    if not c.validation.valid:
-        raise HTTPException(status_code=400, detail="Candidate is not valid and cannot be exported")
-    if c.score.total < 70.0:
-        raise HTTPException(status_code=400, detail="Candidate does not meet export quality threshold: total >= 70")
-
-
-@router.post("/generate", response_model=GenerateResponse)
-def generate(req: BriefRequest) -> GenerateResponse:
-    return generate_from_prompt(req.prompt)
-
-
-@router.post("/parse", response_model=ParseResponse)
-async def parse(file: UploadFile = File(...)) -> ParseResponse:
-    dest = OUTPUT_DIR / file.filename
-    dest.write_bytes(await file.read())
-    return parse_plan(dest)
-
-
-@router.post("/validate")
-def validate(req: ValidateRequest):
-    report = validate_candidate(req.candidate)
-    return report.model_dump()
-
-
-@router.post("/export/svg")
-def export_to_svg(req: ExportRequest):
-    _ensure_exportable(req)
-    path = OUTPUT_DIR / f"{req.candidate.id}.svg"
-    export_svg(req.candidate, path)
-    return FileResponse(path, media_type="image/svg+xml", filename=path.name)
-
-
-@router.post("/export/pdf")
-def export_to_pdf(req: ExportRequest):
-    _ensure_exportable(req)
-    path = OUTPUT_DIR / f"{req.candidate.id}.pdf"
-    export_pdf(req.candidate, path)
-    return FileResponse(path, media_type="application/pdf", filename=path.name)
-
-
-@router.post("/export/dxf")
-def export_to_dxf(req: ExportRequest):
-    _ensure_exportable(req)
-    path = OUTPUT_DIR / f"{req.candidate.id}.dxf"
-    export_dxf(req.candidate, path)
-    return FileResponse(path, media_type="application/dxf", filename=path.name)
-
-
-@router.post("/export/png")
-def export_to_png(req: ExportRequest):
-    _ensure_exportable(req)
-    path = OUTPUT_DIR / f"{req.candidate.id}.png"
-    export_png_preview(req.candidate, path)
-    return FileResponse(path, media_type="image/png", filename=path.name)
-
-
-@router.post("/export/svg-inline")
-def export_svg_inline(req: ExportRequest):
-    _ensure_exportable(req)
-    return Response(content=draft_svg(req.candidate), media_type="image/svg+xml")
+MEDIA = {
+    "svg": "image/svg+xml",
+    "pdf": "application/pdf",
+    "png": "image/png",
+    "dxf": "application/dxf",
+}
 
 
 @router.get("/examples")
-def examples():
-    return JSONResponse(
-        [
-            "Make a floor plan for 2 bedrooms, kitchen, bathroom. 800 sqft",
-            "Design a compact 2-bedroom apartment with open kitchen and good daylight",
-            "Create a 3-bedroom house around 1400 sqft with master suite privacy and efficient circulation",
-        ]
+def examples() -> list[dict[str, str]]:
+    return EXAMPLES
+
+
+@router.get("/room-types")
+def room_types() -> list[dict]:
+    """Catalog used by the program editor."""
+    return [
+        {
+            "type": s.type,
+            "label": s.label,
+            "zone": s.zone,
+            "residential": s.type in RESIDENTIAL_TYPES,
+            "commercial": s.type in COMMERCIAL_TYPES,
+        }
+        for s in SPECS.values()
+        if s.type not in {"corridor", "stair"}
+    ]
+
+
+@router.post("/interpret", response_model=StructuredBrief)
+def interpret(req: InterpretRequest) -> StructuredBrief:
+    return interpret_brief(req.prompt)
+
+
+@router.post("/generate", response_model=GenerateResponse)
+def generate_plans(req: GenerateRequest) -> GenerateResponse:
+    brief = req.brief or interpret_brief(req.prompt or "")
+    if not any(r.count > 0 for r in brief.rooms):
+        raise HTTPException(status_code=422, detail="The brief has no rooms")
+    try:
+        result = generate(brief, req.count)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    result.drawings = {c.id: app_svgs(c) for c in result.candidates}
+    return result
+
+
+@router.post("/validate", response_model=ValidationReport)
+def validate(req: ValidateRequest) -> ValidationReport:
+    return validate_candidate(req.candidate, req.target_area_sqm)
+
+
+@router.post("/export/{fmt}")
+def export(fmt: Literal["svg", "pdf", "png", "dxf"], req: ExportRequest) -> Response:
+    data = export_file(req.candidate, fmt, req.units, req.title)
+    filename = f"parti-{req.candidate.id}.{fmt}"
+    return Response(
+        content=data,
+        media_type=MEDIA[fmt],
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )

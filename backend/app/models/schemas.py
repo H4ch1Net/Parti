@@ -1,165 +1,278 @@
+"""API and engine data models."""
+
 from __future__ import annotations
 
-from typing import Any, Literal
+from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, computed_field, model_validator
+
+SQM_TO_SQFT = 10.7639
+
+RoomType = Literal[
+    "entry",
+    "living",
+    "studio",
+    "dining",
+    "kitchen",
+    "bedroom",
+    "bathroom",
+    "ensuite",
+    "powder",
+    "corridor",
+    "stair",
+    "laundry",
+    "storage",
+    "garage",
+    "study",
+    "reception",
+    "open_office",
+    "private_office",
+    "meeting_room",
+    "break_room",
+    "server_room",
+]
+Zone = Literal["public", "private", "service", "circulation"]
+Point = list[float]
+
+
+# ---------------------------------------------------------------- brief ----
+
 
 class RoomRequest(BaseModel):
-    type: str
-    count: int = Field(default=1, ge=1, le=12)
+    type: RoomType
+    count: int = Field(default=1, ge=0, le=12)
 
 
 class Preferences(BaseModel):
-    open_kitchen: bool = False
+    daylight: bool = False
     privacy: bool = False
     compact: bool = False
-    daylight: bool = True
-    efficient_circulation: bool = True
-
-
-class BriefRequest(BaseModel):
-    prompt: str = Field(min_length=3)
 
 
 class StructuredBrief(BaseModel):
-    raw_prompt: str
-    target_area_sqft: float
-    target_area_sqm: float
+    raw_prompt: str = Field(default="", max_length=2000)
+    building_type: Literal["residential", "commercial"] = "residential"
+    target_area_sqm: float = Field(ge=15, le=1500)
+    area_source: Literal["stated", "estimated"] = "estimated"
+    stories: int = Field(default=1, ge=1, le=3)
+    style: Literal["open_plan", "traditional"] = "open_plan"
     rooms: list[RoomRequest]
-    preferences: Preferences
-    building_type: Literal["residential", "commercial", "mixed"] = "residential"
-    story_count: int = 1
-    style_preference: Literal["open_plan", "traditional"] = "open_plan"
-    explicit_adjacency: list[tuple[str, str]] = Field(default_factory=list)
+    preferences: Preferences = Field(default_factory=Preferences)
+    notes: list[str] = Field(default_factory=list)
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def target_area_sqft(self) -> float:
+        return round(self.target_area_sqm * SQM_TO_SQFT, 1)
+
+    def count(self, room_type: str) -> int:
+        return sum(r.count for r in self.rooms if r.type == room_type)
+
+    @model_validator(mode="after")
+    def _limit_rooms(self) -> StructuredBrief:
+        if sum(r.count for r in self.rooms) > 40:
+            raise ValueError("A brief may contain at most 40 rooms")
+        return self
+
+
+# -------------------------------------------------------------- program ----
 
 
 class ProgramRoom(BaseModel):
     id: str
-    type: str
+    type: RoomType
     name: str
-    zone: Literal["public", "private", "service", "circulation"]
+    zone: Zone
+    floor: int = 1
     target_area_sqm: float
     min_area_sqm: float
-    floor: int = 1
+    primary: bool = False
 
 
-class ProgramOutput(BaseModel):
+class AdjacencyPreference(BaseModel):
+    a: str
+    b: str
+    weight: float
+
+
+class Program(BaseModel):
     target_area_sqm: float
+    stories: int
     rooms: list[ProgramRoom]
-    adjacency_matrix: dict[str, dict[str, float]]
+    adjacency: list[AdjacencyPreference]
 
 
-class DoorGeometry(BaseModel):
+# ------------------------------------------------------------ candidate ----
+
+
+class Room(BaseModel):
     id: str
+    type: RoomType
+    name: str
+    zone: Zone
+    floor: int
+    polygon: list[Point]
+    width_m: float
+    depth_m: float
+    area_sqm: float
+    target_area_sqm: float
+    primary: bool = False
+
+
+class Wall(BaseModel):
+    id: str
+    floor: int
+    segment: list[Point]
+    thickness: float
+    exterior: bool
+
+
+class Door(BaseModel):
+    """A connection cut into a wall.
+
+    ``kind`` is ``entry`` (front door), ``door`` (swing door), ``opening``
+    (cased opening with no leaf) or ``garage`` (overhead door). For swing
+    doors ``hinge`` is the pivot and ``swing`` the leaf tip when fully open.
+    """
+
+    id: str
+    kind: Literal["entry", "door", "opening", "garage"]
+    floor: int
     room_a: str
     room_b: str
-    wall_segment: list[list[float]]
-    hinge: list[float]
-    leaf_end: list[float]
-    swing_radius: float
+    segment: list[Point]
     width: float
+    hinge: Point | None = None
+    swing: Point | None = None
 
 
-class WindowGeometry(BaseModel):
+class Window(BaseModel):
     id: str
     room_id: str
-    wall_segment: list[list[float]]
+    floor: int
+    segment: list[Point]
     width: float
 
 
 class Fixture(BaseModel):
     id: str
     room_id: str
+    floor: int
     type: str
-    footprint: list[list[float]]
+    footprint: list[Point]
+    facing: Literal["n", "s", "e", "w"] = "n"
 
 
-class RoomGeometry(BaseModel):
-    id: str
-    type: str
-    name: str
-    zone: str
-    polygon: list[list[float]]
-    area_sqm: float
-    width_m: float
-    depth_m: float
-    floor: int = 1
-
-
-class Wall(BaseModel):
-    id: str
-    room_id: str
-    segment: list[list[float]]
-    thickness: float
-    exterior: bool
-
-
-class CirculationEdge(BaseModel):
+class Connection(BaseModel):
     from_room: str
     to_room: str
+    kind: Literal["door", "opening", "stair"]
     length_m: float
 
 
-class ScoreBreakdown(BaseModel):
-    area_accuracy: float
-    adjacency_quality: float
-    zoning_quality: float
-    privacy: float
-    circulation_efficiency: float
-    daylight_potential: float
-    furniture_usability: float
-    compactness: float
-    wall_efficiency: float
+class ScoreCategory(BaseModel):
+    key: str
+    label: str
+    score: float
+    weight: float
+    detail: str
+
+
+class Score(BaseModel):
     total: float
-    explanation: str
-    grid_alignment_score: float = 0.0
-    hierarchy_score: float = 0.0
-    circulation_composition_score: float = 0.0
-    spatial_sequence_score: float = 0.0
+    grade: Literal["excellent", "good", "fair", "weak"]
+    categories: list[ScoreCategory]
+    summary: str
+
+    def category(self, key: str) -> ScoreCategory:
+        return next(c for c in self.categories if c.key == key)
+
+
+class Issue(BaseModel):
+    severity: Literal["error", "warning"]
+    code: str
+    message: str
+    room_ids: list[str] = Field(default_factory=list)
 
 
 class ValidationReport(BaseModel):
     valid: bool
-    errors: list[str] = Field(default_factory=list)
-    warnings: list[str] = Field(default_factory=list)
+    issues: list[Issue] = Field(default_factory=list)
+
+    @property
+    def errors(self) -> list[str]:
+        return [i.message for i in self.issues if i.severity == "error"]
+
+    @property
+    def warnings(self) -> list[str]:
+        return [i.message for i in self.issues if i.severity == "warning"]
 
 
-class RoomScheduleRow(BaseModel):
-    room_name: str
-    room_type: str
-    area_sqm: float
-    dimensions_m: str
+class Footprint(BaseModel):
+    width_m: float
+    depth_m: float
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def area_sqm(self) -> float:
+        return round(self.width_m * self.depth_m, 2)
 
 
-class LayoutCandidate(BaseModel):
+class Candidate(BaseModel):
     id: str
-    rooms: list[RoomGeometry]
+    label: str
+    strategy: str
+    floors: int
+    footprint: Footprint
+    rooms: list[Room]
     walls: list[Wall]
-    openings: dict[str, list[Any]]
+    doors: list[Door]
+    windows: list[Window]
     fixtures: list[Fixture]
+    connections: list[Connection]
     zones: dict[str, list[str]]
-    circulation: list[CirculationEdge]
-    schedule: list[RoomScheduleRow]
-    score: ScoreBreakdown
+    score: Score
     validation: ValidationReport
+
+    @property
+    def total_area_sqm(self) -> float:
+        return sum(r.area_sqm for r in self.rooms)
+
+
+# ------------------------------------------------------------------ API ----
+
+
+class InterpretRequest(BaseModel):
+    prompt: str = Field(min_length=1, max_length=2000)
+
+
+class GenerateRequest(BaseModel):
+    prompt: str | None = Field(default=None, max_length=2000)
+    brief: StructuredBrief | None = None
+    count: int = Field(default=6, ge=1, le=12)
+
+    @model_validator(mode="after")
+    def _need_input(self) -> GenerateRequest:
+        if self.brief is None and not (self.prompt and self.prompt.strip()):
+            raise ValueError("Provide either a prompt or a structured brief")
+        return self
 
 
 class GenerateResponse(BaseModel):
     brief: StructuredBrief
-    program: ProgramOutput
-    candidates: list[LayoutCandidate]
+    program: Program
+    candidates: list[Candidate]
     best_candidate_id: str
+    drawings: dict[str, list[str]] = Field(default_factory=dict, description="Inline SVG per candidate id, one entry per floor")
+    elapsed_ms: int = 0
 
 
 class ValidateRequest(BaseModel):
-    candidate: LayoutCandidate
+    candidate: Candidate
+    target_area_sqm: float | None = None
 
 
 class ExportRequest(BaseModel):
-    candidate: LayoutCandidate
-
-
-class ParseResponse(BaseModel):
-    walls: list[list[list[float]]]
-    room_polygons: list[list[list[float]]]
-    labels: list[str]
+    candidate: Candidate
+    units: Literal["metric", "imperial"] = "metric"
+    title: str | None = Field(default=None, max_length=120)
