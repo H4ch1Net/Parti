@@ -1,8 +1,9 @@
-import { useState } from 'react'
+import { type CSSProperties, useState } from 'react'
 import { formatArea, formatDims, formatLength, signedPercent } from '../lib/units'
 import type { Candidate, Units } from '../types'
 import { ExportPanel } from './ExportPanel'
-import { Icon } from './Icon'
+import { SectionHead } from './controls'
+import { Bubble, Icon } from './Icon'
 
 export type DetailTab = 'score' | 'rooms' | 'checks' | 'export'
 
@@ -36,41 +37,51 @@ export function DetailsPanel(p: Props) {
 
   return (
     <section className="panel details" aria-labelledby="details-title">
-      <header className="details-head">
-        <div>
-          <h2 id="details-title">{c.label}</h2>
-          <p className="muted small">
-            {c.strategy}
-            {c.floors > 1 && ` · ${c.floors} levels`}
-          </p>
-        </div>
-        <ScoreDial value={c.score.total} grade={c.score.grade} />
-      </header>
+      <SectionHead index="4" title="Sheet" note={c.floors > 1 ? `${c.floors} levels` : undefined} />
 
-      <dl className="stats">
-        <div>
-          <dt>Area</dt>
-          <dd>
-            {formatArea(total, p.units, 1)}
-            <small className={Math.abs(total / p.targetArea - 1) > 0.05 ? 'delta warn' : 'delta'}>{signedPercent(total / p.targetArea - 1)}</small>
-          </dd>
+      <div className="titleblock">
+        <div className="tb-cell tb-title">
+          <span className="tb-label">Drawing</span>
+          <h2 id="details-title">{c.label}</h2>
+          <span className="tb-sub">{c.strategy}</span>
+          <Bubble size="lg" active>
+            {c.label.replace('Variant ', '')}
+          </Bubble>
         </div>
-        <div>
-          <dt>Footprint</dt>
-          <dd className="nowrap-metric">
-            {p.units === 'metric'
-              ? `${c.footprint.width_m.toFixed(1)} × ${c.footprint.depth_m.toFixed(1)} m`
-              : `${formatLength(c.footprint.width_m, p.units)} × ${formatLength(c.footprint.depth_m, p.units)}`}
-          </dd>
+        <div className={`tb-cell tb-score grade-${c.score.grade}`} title={`Overall score ${c.score.total.toFixed(1)} / 100`}>
+          <span className="tb-label">Score</span>
+          <div className="tb-score-row">
+            <strong className="numeral">{Math.round(c.score.total)}</strong>
+            <span className="tb-of">/100</span>
+            <span className="tb-grade">{GRADE_LABEL[c.score.grade]}</span>
+          </div>
+          <ScaleMeter value={c.score.total} label="Overall score" />
         </div>
-        <div>
-          <dt>Status</dt>
-          <dd className={errors.length ? 'status-bad' : 'status-ok'}>
-            <Icon name={errors.length ? 'error' : 'check'} size={14} />
-            {errors.length ? `${errors.length} error${errors.length > 1 ? 's' : ''}` : warnings.length ? `${warnings.length} note${warnings.length > 1 ? 's' : ''}` : 'Passes'}
-          </dd>
-        </div>
-      </dl>
+        <dl className="tb-grid">
+          <div className="tb-cell">
+            <dt className="tb-label">Area</dt>
+            <dd>
+              {formatArea(total, p.units, 1)}
+              <small className={Math.abs(total / p.targetArea - 1) > 0.05 ? 'delta warn' : 'delta'}>{signedPercent(total / p.targetArea - 1)}</small>
+            </dd>
+          </div>
+          <div className="tb-cell">
+            <dt className="tb-label">Footprint</dt>
+            <dd className="nowrap-metric">
+              {p.units === 'metric'
+                ? `${c.footprint.width_m.toFixed(1)} × ${c.footprint.depth_m.toFixed(1)} m`
+                : `${formatLength(c.footprint.width_m, p.units)} × ${formatLength(c.footprint.depth_m, p.units)}`}
+            </dd>
+          </div>
+          <div className="tb-cell">
+            <dt className="tb-label">Checks</dt>
+            <dd className={errors.length ? 'status-bad' : warnings.length ? 'status-note' : 'status-ok'}>
+              <Icon name={errors.length ? 'error' : warnings.length ? 'alert' : 'check'} size={14} />
+              {errors.length ? `${errors.length} error${errors.length > 1 ? 's' : ''}` : warnings.length ? `${warnings.length} note${warnings.length > 1 ? 's' : ''}` : 'All pass'}
+            </dd>
+          </div>
+        </dl>
+      </div>
 
       <div className="tabs" role="tablist" aria-label="Plan details">
         {tabs.map((t) => (
@@ -100,41 +111,43 @@ export function DetailsPanel(p: Props) {
   )
 }
 
-function ScoreDial({ value, grade }: { value: number; grade: Candidate['score']['grade'] }) {
-  const r = 22
-  const circ = 2 * Math.PI * r
+/** Score meter drawn as an architectural scale bar: alternating ten-point blocks. */
+function ScaleMeter({ value, label, flagged = false }: { value: number; label: string; flagged?: boolean }) {
   return (
-    <div className={`dial grade-${grade}`} title={`Overall score ${value.toFixed(1)} / 100`}>
-      <div className="dial-ring">
-        <svg viewBox="0 0 56 56" width="52" height="52" aria-hidden="true">
-          <circle cx="28" cy="28" r={r} className="dial-track" />
-          <circle cx="28" cy="28" r={r} className="dial-value" strokeDasharray={`${(circ * value) / 100} ${circ}`} transform="rotate(-90 28 28)" />
-        </svg>
-        <strong>{Math.round(value)}</strong>
-      </div>
-      <span className="dial-grade">{GRADE_LABEL[grade]}</span>
+    <div
+      className={`scale-meter ${flagged ? 'is-flagged' : ''}`}
+      role="meter"
+      aria-valuenow={Math.round(value)}
+      aria-valuemin={0}
+      aria-valuemax={100}
+      aria-label={label}
+    >
+      <span className="scale-fill" style={{ '--v': `${Math.max(0, Math.min(100, value))}%` } as CSSProperties} />
     </div>
   )
 }
 
 function ScoreView({ candidate }: { candidate: Candidate }) {
   const s = candidate.score
+  const weakest = s.categories.reduce((a, b) => (b.score < a.score ? b : a), s.categories[0])
   return (
     <div className="score-view">
       <p className="summary">{s.summary}</p>
       <ul className="bars">
-        {s.categories.map((cat) => (
-          <li key={cat.key}>
-            <div className="bar-head">
-              <span>{cat.label}</span>
-              <span className="mono">{Math.round(cat.score)}</span>
-            </div>
-            <div className="bar" role="meter" aria-valuenow={Math.round(cat.score)} aria-valuemin={0} aria-valuemax={100} aria-label={cat.label}>
-              <span style={{ width: `${cat.score}%` }} className={cat.score >= 85 ? 'hi' : cat.score >= 65 ? 'mid' : 'lo'} />
-            </div>
-            <p className="bar-detail">{cat.detail}</p>
-          </li>
-        ))}
+        {s.categories.map((cat) => {
+          const flagged = cat.key === weakest?.key && cat.score < 95
+          return (
+            <li key={cat.key} className={flagged ? 'is-weakest' : ''}>
+              <div className="bar-head">
+                <span className="bar-label">{cat.label}</span>
+                {flagged && <span className="redline-tag">Weakest</span>}
+                <span className="bar-value">{Math.round(cat.score)}</span>
+              </div>
+              <ScaleMeter value={cat.score} label={cat.label} flagged={flagged} />
+              <p className="bar-detail">{cat.detail}</p>
+            </li>
+          )
+        })}
       </ul>
       <p className="fine">Weighted average of the categories above. Plans with blocking errors are capped at 55.</p>
     </div>
@@ -178,7 +191,7 @@ function RoomsTable(p: Props & { total: number }) {
               >
                 <td>
                   <button type="button" className="room-link" onClick={() => p.onSelectRoom(p.selectedRoom === r.id ? null : r.id)}>
-                    <span className={`zone-dot zone-${r.zone}`} aria-hidden="true" />
+                    <span className={`swatch zone-${r.zone}`} aria-hidden="true" />
                     <span className="room-name">
                       {r.name}
                       {c.floors > 1 && <small className="muted">Level {r.floor}</small>}

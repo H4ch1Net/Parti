@@ -1,10 +1,6 @@
 <div align="center">
 
-<img src="frontend/public/favicon.svg" width="64" height="64" alt="Parti logo" />
-
-# Parti
-
-Schematic floor plans from a plain-language brief.
+<img src="docs/brand/banner.png" alt="Parti: schematic floor plans from a written brief" width="100%" />
 
 [![CI](https://github.com/H4ch1Net/Parti/actions/workflows/ci.yml/badge.svg)](https://github.com/H4ch1Net/Parti/actions/workflows/ci.yml)
 ![Python](https://img.shields.io/badge/python-3.11%2B-3776AB?logo=python&logoColor=white)
@@ -36,7 +32,7 @@ A *parti* is the organising idea behind an architectural plan. Here it is the ar
 | **Interactive canvas** | Pan, zoom and pinch on crisp vectors. Hover and click rooms for details, toggle furniture, labels and dimensions, and switch levels. |
 | **Exports** | PDF (A3 at a standard scale), SVG (1:100), PNG, DXF with CAD layers, and JSON. |
 | **Sharing** | The URL encodes the brief, and generation is deterministic, so a link reproduces the same plans. |
-| **Comfort** | Light and dark (blueprint) themes, metric and imperial units, keyboard shortcuts, recent briefs, and layouts down to phone width. |
+| **Comfort** | Light (vellum) and dark (cyanotype) themes, metric and imperial units, keyboard shortcuts, recent briefs, and layouts down to phone width. |
 
 ## Screenshots
 
@@ -181,6 +177,10 @@ Copy `.env.example` for reference. All settings are optional.
 
 The smoke and screenshot scripts use Playwright. Install a browser once with `npx playwright install chromium`, or point `CHROMIUM_PATH` at an existing Chromium.
 
+## Design
+
+The interface is styled as a drawing sheet: a framed sheet on a desk, columns divided by rules, numbered grid bubbles for sections, and a title block for the selected plan. Zones are told apart by tint and hatch, not colour alone. The accent is used only for redline: the selected room, the current variant and the weakest score. One typeface, Archivo, is used on screen and in exports. Details and tokens are in [docs/design.md](docs/design.md).
+
 ## How it works
 
 ```mermaid
@@ -212,8 +212,8 @@ backend/
   tests/                 engine invariants, interpreter, API and export tests
 frontend/
   src/                   React app (components, hooks, lib, styles)
-  scripts/               Playwright smoke test and screenshot capture
-docs/                    architecture, API reference, screenshots
+  scripts/               Playwright smoke test, screenshots and brand images
+docs/                    architecture, API reference, design notes, brand images, screenshots
 Dockerfile               single image: web build + API
 docker-compose.yml       development stack
 ```
@@ -223,7 +223,7 @@ docker-compose.yml       development stack
 - Footprints are rectangles and rooms are rectangles. There are no L-shaped plans, courtyards or angled walls.
 - Every level shares the ground floor footprint.
 - Very large or dense programs, such as dozens of offices over several floors, may not produce a plan that passes every check. The best attempt is returned with its issues listed.
-- Furniture placement is heuristic and meant to show that a room is usable, not to design the interior.
+- Furniture is placed automatically from a recipe per room type and is meant to show that a room is usable, not to design the interior. Pieces cannot be picked or moved yet; the Furniture layer can be hidden.
 - Sizes and rules are general residential and office conventions, not a specific building code.
 
 ## Troubleshooting
@@ -237,6 +237,6 @@ docker-compose.yml       development stack
 
 ## Contributing
 
-Issues and pull requests are welcome. Before opening a pull request, run `make lint test`. For UI changes, also run `make smoke` and refresh screenshots with `make screenshots` if the interface changed. CI runs the same lint, test and build steps.
+Issues and pull requests are welcome. Before opening a pull request, run `make lint test`. For UI changes, also run `make smoke` and refresh screenshots with `make screenshots` if the interface changed. `make brand` re-renders the banner and icons. CI runs the same lint, test and build steps.
 
 The repository does not have a license file yet. Add one before accepting outside contributions.

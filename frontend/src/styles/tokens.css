@@ -1,144 +1,157 @@
 /*
-  Parti design tokens.
-  Light theme: drafting paper and ink. Dark theme: blueprint.
-  Plan colours are shared with the server-rendered drawing via the classes in plan.css.
+  Parti design tokens: "Construction Set".
+
+  The interface is a drawing sheet. Colours are taken from Le Corbusier's
+  Polychromie Architecturale (1931/1959): ivory paper and ivory-black ink,
+  "orange vif" as the redline accent, and pale "terre sienne", "vert anglais",
+  "outremer" and grey tints for zones. The dark theme is a cyanotype on
+  "bleu outremer foncé" with an ochre pencil accent.
+
+  One type family (Archivo, variable weight and width) carries everything:
+  expanded for the wordmark, semi-condensed capitals for labels, normal width
+  for text, tabular figures for data.
 */
 
 :root {
   color-scheme: light;
-  --font-sans: 'IBM Plex Sans', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
-  --font-mono: 'IBM Plex Mono', ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
 
-  --bg: #f1efe8;
-  --surface: #fbfaf6;
-  --surface-2: #f3f1ea;
-  --surface-3: #e9e6dd;
-  --line: #e0dcd1;
-  --line-strong: #cbc6b8;
-  --ink: #1b1c1f;
-  --ink-2: #4b4a45;
-  --ink-3: #7c796f;
-  --accent: #2f57c9;
-  --accent-hover: #2449b0;
-  --accent-ink: #ffffff;
-  --accent-soft: #e4e9f8;
-  --ok: #2c7a4b;
-  --ok-soft: #e1f0e5;
-  --warn: #9a5f0a;
-  --warn-soft: #f7ecd6;
-  --err: #bf3a30;
-  --err-soft: #f8e2df;
-  --focus: 0 0 0 3px color-mix(in srgb, var(--accent) 35%, transparent);
+  --font: 'Archivo Variable', Archivo, 'Helvetica Neue', Arial, sans-serif;
+  --font-code: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+  --wide: 118%;
+  --semi: 86%;
+  --cond: 74%;
 
-  --canvas: #fdfcf8;
-  --grid: rgba(27, 28, 31, 0.045);
-  --grid-major: rgba(27, 28, 31, 0.08);
+  /* Paper and ink */
+  --desk: #ece8dd;
+  --sheet: #fbf9f3;
+  --sheet-2: #f5f2ea;
+  --sheet-3: #ebe7dc;
+  --ink: #14181c;
+  --ink-2: #4b5459;
+  --ink-3: #5f696d;
+  --rule: rgba(20, 24, 28, 0.13);
+  --rule-strong: rgba(20, 24, 28, 0.3);
+  --frame: #14181c;
 
-  --zone-public: #f3eadb;
-  --zone-private: #e2ece0;
-  --zone-service: #dfe8f0;
-  --zone-circulation: #eeede8;
-  --plan-wall: #1b1c1f;
-  --plan-fx: #6e6c66;
-  --plan-fx-fill: #ffffff;
-  --plan-fx-solid: #eceae4;
-  --plan-label: #1b1c1f;
-  --plan-label-2: #55534d;
-  --plan-label-3: #7c796f;
-  --plan-dim: #5d5b55;
-  --plan-halo: rgba(253, 252, 248, 0.82);
+  /* Redline accent (orange vif) and states */
+  --accent: #b3401b;
+  --accent-hover: #a33a29;
+  --accent-ink: #fffcf5;
+  --accent-soft: rgba(194, 71, 29, 0.09);
+  --ok: #2c695a;
+  --ok-soft: rgba(44, 105, 90, 0.1);
+  --warn: #8c5a0e;
+  --warn-soft: rgba(242, 181, 115, 0.22);
+  --err: #9c2128;
+  --err-soft: rgba(156, 33, 40, 0.08);
 
-  --radius: 10px;
-  --radius-sm: 6px;
-  --radius-xs: 4px;
-  --shadow-sm: 0 1px 2px rgba(20, 20, 18, 0.06);
-  --shadow: 0 1px 2px rgba(20, 20, 18, 0.05), 0 6px 20px rgba(20, 20, 18, 0.07);
-  --shadow-lg: 0 2px 6px rgba(20, 20, 18, 0.06), 0 18px 48px rgba(20, 20, 18, 0.14);
+  /* Drawing */
+  --canvas: #fcfbf7;
+  --dot: rgba(20, 24, 28, 0.11);
+  --zone-public: #f6e4cd;
+  --zone-private: #dfe7d7;
+  --zone-service: #d8e2e4;
+  --zone-circulation: #ebe9e2;
+  --hatch: rgba(20, 24, 28, 0.075);
+  --plan-wall: #14181c;
+  --plan-fx: #6c7579;
+  --plan-fx-fill: #fffef9;
+  --plan-fx-solid: #ebe7dd;
+  --plan-label: #14181c;
+  --plan-label-2: #4b5459;
+  --plan-label-3: #646e72;
+  --plan-dim: #5b6468;
+  --plan-halo: rgba(252, 251, 247, 0.86);
+
+  /* Surfaces and motion */
+  --shadow-sheet: 3px 3px 0 rgba(20, 24, 28, 0.13);
+  --shadow-lift: 2px 2px 0 rgba(20, 24, 28, 0.1);
   --ease: cubic-bezier(0.2, 0.7, 0.2, 1);
+  --plot: cubic-bezier(0.45, 0, 0.2, 1);
 }
 
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme='light']) {
     color-scheme: dark;
-    --bg: #0b111b;
-    --surface: #111a27;
-    --surface-2: #162132;
-    --surface-3: #1c2a3f;
-    --line: #1f2d43;
-    --line-strong: #2c3e5b;
-    --ink: #e5ebf4;
-    --ink-2: #a8b5c8;
-    --ink-3: #7182a0;
-    --accent: #7ea4ff;
-    --accent-hover: #9bb8ff;
-    --accent-ink: #0a1120;
-    --accent-soft: rgba(126, 164, 255, 0.15);
-    --ok: #5fcf8e;
-    --ok-soft: rgba(95, 207, 142, 0.13);
-    --warn: #f0b350;
-    --warn-soft: rgba(240, 179, 80, 0.13);
-    --err: #ff7b6f;
-    --err-soft: rgba(255, 123, 111, 0.13);
-    --canvas: #0e1828;
-    --grid: rgba(150, 185, 255, 0.05);
-    --grid-major: rgba(150, 185, 255, 0.09);
-    --zone-public: #1d2638;
-    --zone-private: #172a2c;
-    --zone-service: #16253b;
-    --zone-circulation: #141f31;
-    --plan-wall: #dde6f4;
-    --plan-fx: #7f95b6;
-    --plan-fx-fill: #101c2e;
-    --plan-fx-solid: #182841;
-    --plan-label: #e5ebf4;
-    --plan-label-2: #a8b5c8;
-    --plan-label-3: #7a8cab;
-    --plan-dim: #8ea0bd;
-    --plan-halo: rgba(14, 24, 40, 0.78);
-    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
-    --shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 8px 24px rgba(0, 0, 0, 0.35);
-    --shadow-lg: 0 2px 8px rgba(0, 0, 0, 0.35), 0 24px 60px rgba(0, 0, 0, 0.5);
+    --desk: #081c3a;
+    --sheet: #0d2a52;
+    --sheet-2: #11325f;
+    --sheet-3: #173c70;
+    --ink: #eef3fa;
+    --ink-2: #b6c6dc;
+    --ink-3: #829ec2;
+    --rule: rgba(214, 228, 250, 0.15);
+    --rule-strong: rgba(214, 228, 250, 0.34);
+    --frame: #dbe7f6;
+    --accent: #f2a65a;
+    --accent-hover: #f7bd7f;
+    --accent-ink: #081c3a;
+    --accent-soft: rgba(242, 166, 90, 0.14);
+    --ok: #8fd3a8;
+    --ok-soft: rgba(143, 211, 168, 0.12);
+    --warn: #f4c46c;
+    --warn-soft: rgba(244, 196, 108, 0.12);
+    --err: #ff8f80;
+    --err-soft: rgba(255, 143, 128, 0.12);
+    --canvas: #0e2d58;
+    --dot: rgba(220, 234, 255, 0.14);
+    --zone-public: #213f66;
+    --zone-private: #163b5c;
+    --zone-service: #1a3a67;
+    --zone-circulation: #12335f;
+    --hatch: rgba(220, 234, 255, 0.11);
+    --plan-wall: #eef3fa;
+    --plan-fx: #93add0;
+    --plan-fx-fill: #0e2d58;
+    --plan-fx-solid: #173c70;
+    --plan-label: #eef3fa;
+    --plan-label-2: #b6c6dc;
+    --plan-label-3: #829ec2;
+    --plan-dim: #9bb3d3;
+    --plan-halo: rgba(14, 45, 88, 0.82);
+    --shadow-sheet: 3px 3px 0 rgba(3, 12, 28, 0.55);
+    --shadow-lift: 2px 2px 0 rgba(3, 12, 28, 0.45);
   }
 }
 
 :root[data-theme='dark'] {
   color-scheme: dark;
-  --bg: #0b111b;
-  --surface: #111a27;
-  --surface-2: #162132;
-  --surface-3: #1c2a3f;
-  --line: #1f2d43;
-  --line-strong: #2c3e5b;
-  --ink: #e5ebf4;
-  --ink-2: #a8b5c8;
-  --ink-3: #7182a0;
-  --accent: #7ea4ff;
-  --accent-hover: #9bb8ff;
-  --accent-ink: #0a1120;
-  --accent-soft: rgba(126, 164, 255, 0.15);
-  --ok: #5fcf8e;
-  --ok-soft: rgba(95, 207, 142, 0.13);
-  --warn: #f0b350;
-  --warn-soft: rgba(240, 179, 80, 0.13);
-  --err: #ff7b6f;
-  --err-soft: rgba(255, 123, 111, 0.13);
-  --canvas: #0e1828;
-  --grid: rgba(150, 185, 255, 0.05);
-  --grid-major: rgba(150, 185, 255, 0.09);
-  --zone-public: #1d2638;
-  --zone-private: #172a2c;
-  --zone-service: #16253b;
-  --zone-circulation: #141f31;
-  --plan-wall: #dde6f4;
-  --plan-fx: #7f95b6;
-  --plan-fx-fill: #101c2e;
-  --plan-fx-solid: #182841;
-  --plan-label: #e5ebf4;
-  --plan-label-2: #a8b5c8;
-  --plan-label-3: #7a8cab;
-  --plan-dim: #8ea0bd;
-  --plan-halo: rgba(14, 24, 40, 0.78);
-  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
-  --shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 8px 24px rgba(0, 0, 0, 0.35);
-  --shadow-lg: 0 2px 8px rgba(0, 0, 0, 0.35), 0 24px 60px rgba(0, 0, 0, 0.5);
+  --desk: #081c3a;
+  --sheet: #0d2a52;
+  --sheet-2: #11325f;
+  --sheet-3: #173c70;
+  --ink: #eef3fa;
+  --ink-2: #b6c6dc;
+  --ink-3: #829ec2;
+  --rule: rgba(214, 228, 250, 0.15);
+  --rule-strong: rgba(214, 228, 250, 0.34);
+  --frame: #dbe7f6;
+  --accent: #f2a65a;
+  --accent-hover: #f7bd7f;
+  --accent-ink: #081c3a;
+  --accent-soft: rgba(242, 166, 90, 0.14);
+  --ok: #8fd3a8;
+  --ok-soft: rgba(143, 211, 168, 0.12);
+  --warn: #f4c46c;
+  --warn-soft: rgba(244, 196, 108, 0.12);
+  --err: #ff8f80;
+  --err-soft: rgba(255, 143, 128, 0.12);
+  --canvas: #0e2d58;
+  --dot: rgba(220, 234, 255, 0.14);
+  --zone-public: #213f66;
+  --zone-private: #163b5c;
+  --zone-service: #1a3a67;
+  --zone-circulation: #12335f;
+  --hatch: rgba(220, 234, 255, 0.11);
+  --plan-wall: #eef3fa;
+  --plan-fx: #93add0;
+  --plan-fx-fill: #0e2d58;
+  --plan-fx-solid: #173c70;
+  --plan-label: #eef3fa;
+  --plan-label-2: #b6c6dc;
+  --plan-label-3: #829ec2;
+  --plan-dim: #9bb3d3;
+  --plan-halo: rgba(14, 45, 88, 0.82);
+  --shadow-sheet: 3px 3px 0 rgba(3, 12, 28, 0.55);
+  --shadow-lift: 2px 2px 0 rgba(3, 12, 28, 0.45);
 }

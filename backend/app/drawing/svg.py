@@ -12,44 +12,10 @@ import math
 from xml.sax.saxutils import escape, quoteattr
 
 from app.drawing.sheet import Arc, Circle, Ellipse, Line, Poly, Sheet, Text
+from app.drawing.style import css
+from app.drawing.titleblock import HEIGHT, MIN_WIDTH, TitleInfo, title_block
 
-FONT = "'IBM Plex Sans', 'Helvetica Neue', Arial, sans-serif"
-
-EXPORT_STYLE = f"""
-text {{ font-family: {FONT}; }}
-.bg {{ fill: #ffffff; }}
-.room {{ stroke: none; }}
-.zone-public {{ fill: #f4ede0; }} .zone-private {{ fill: #e7efe6; }}
-.zone-service {{ fill: #e6ecf2; }} .zone-circulation {{ fill: #f2f1ee; }}
-.wall {{ fill: #1c1d21; }}
-.window {{ fill: #ffffff; stroke: #1c1d21; stroke-width: 0.014; }}
-.window-glass {{ stroke: #1c1d21; stroke-width: 0.01; }}
-.door-leaf {{ stroke: #1c1d21; stroke-width: 0.03; }}
-.door-swing {{ stroke: #1c1d21; stroke-width: 0.01; fill: none; }}
-.door-garage {{ stroke: #1c1d21; stroke-width: 0.015; stroke-dasharray: 0.12 0.08; }}
-.boundary {{ stroke: #9a978f; stroke-width: 0.01; stroke-dasharray: 0.1 0.08; }}
-.fx {{ fill: #ffffff; stroke: #6b6a66; stroke-width: 0.012; }}
-.fx-fill {{ fill: #ecebe7; stroke: #6b6a66; stroke-width: 0.012; }}
-.fx-line {{ fill: none; stroke: #6b6a66; stroke-width: 0.01; }}
-.fx-thin {{ fill: none; stroke: #8d8b86; stroke-width: 0.006; }}
-.fx-dash {{ fill: none; stroke: #8d8b86; stroke-width: 0.008; stroke-dasharray: 0.06 0.05; }}
-.stair {{ stroke: #6b6a66; stroke-width: 0.01; }}
-.stair-arrow {{ stroke: #1c1d21; stroke-width: 0.012; }}
-.stair-head {{ fill: #1c1d21; }}
-.label-name {{ fill: #1c1d21; font-weight: 600; letter-spacing: 0.02em; }}
-.label-area {{ fill: #3d3c39; }}
-.label-dim, .label-note {{ fill: #6b6a66; }}
-.dim, .dim-ext {{ stroke: #55534f; stroke-width: 0.008; }}
-.dim-tick {{ stroke: #1c1d21; stroke-width: 0.02; }}
-.dim-text {{ fill: #3d3c39; }}
-.annot-line {{ fill: none; stroke: #1c1d21; stroke-width: 0.012; }}
-.annot-fill {{ fill: #1c1d21; stroke: #1c1d21; stroke-width: 0.012; }}
-.annot-text {{ fill: #3d3c39; }}
-.annot-title {{ fill: #1c1d21; font-weight: 600; letter-spacing: 0.08em; }}
-.tb-rule {{ stroke: #1c1d21; stroke-width: 0.012; }}
-.tb-title {{ fill: #1c1d21; font-weight: 600; }}
-.tb-text {{ fill: #55534f; }}
-"""
+FONT = "Archivo, 'Helvetica Neue', Arial, sans-serif"
 
 
 def _f(v: float) -> str:
@@ -109,17 +75,18 @@ class _Writer:
                 )
 
 
-def render_svg(sheets: list[Sheet], mode: str = "app", title_lines: list[str] | None = None) -> str:
+def render_svg(sheets: list[Sheet], mode: str = "app", info: TitleInfo | None = None) -> str:
     gap = 1.0
     widths = [s.bounds[2] - s.bounds[0] for s in sheets]
     heights = [s.bounds[3] - s.bounds[1] for s in sheets]
-    total_w = sum(widths) + gap * (len(sheets) - 1)
+    plans_w = sum(widths) + gap * (len(sheets) - 1)
     plan_h = max(heights)
-    block_h = 1.5 if mode == "export" and title_lines else 0.0
-    total_h = plan_h + block_h
+    block = mode == "export" and info is not None
+    total_w = max(plans_w, MIN_WIDTH) if block else plans_w
+    total_h = plan_h + (0.3 + HEIGHT + 0.4 if block else 0.0)
 
     body: list[str] = []
-    offset = 0.0
+    offset = (total_w - plans_w) / 2
     for sheet, w in zip(sheets, widths):
         minx, miny, maxx, maxy = sheet.bounds
         writer = _Writer(maxy, offset - minx)
@@ -132,13 +99,11 @@ def render_svg(sheets: list[Sheet], mode: str = "app", title_lines: list[str] | 
         body.append("</g>")
         offset += w + gap
 
-    if block_h:
-        y0 = plan_h + 0.25
-        body.append(f'<line class="tb-rule" x1="0.4" y1="{_f(y0)}" x2="{_f(total_w - 0.4)}" y2="{_f(y0)}"/>')
-        for i, line in enumerate(title_lines or []):
-            cls = "tb-title" if i == 0 else "tb-text"
-            size = 0.32 if i == 0 else 0.2
-            body.append(f'<text class="{cls}" x="0.4" y="{_f(y0 + 0.45 + i * 0.32)}" font-size="{size}">{escape(line)}</text>')
+    if block:
+        writer = _Writer(total_h - 0.4, 0.4)
+        for item in title_block(total_w - 0.8, info, "Scale 1:100 at printed size"):
+            writer.prim(item, mode)
+        body.append('<g class="pt-titleblock">' + "".join(writer.parts) + "</g>")
 
     vb = f"0 0 {_f(total_w)} {_f(total_h)}"
     if mode == "app":
@@ -153,6 +118,6 @@ def render_svg(sheets: list[Sheet], mode: str = "app", title_lines: list[str] | 
     return (
         '<?xml version="1.0" encoding="UTF-8"?>\n'
         f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="{vb}" width="{_f(total_w * 10)}mm" height="{_f(total_h * 10)}mm">'
-        f"<style>{EXPORT_STYLE}</style>"
+        f"<style>{css(FONT)}</style>"
         f'<rect class="bg" x="0" y="0" width="{_f(total_w)}" height="{_f(total_h)}"/>' + "".join(body) + "</svg>"
     )

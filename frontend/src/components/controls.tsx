@@ -63,3 +63,20 @@ export function Kbd({ children }: { children: ReactNode }) {
 
 export const isMac = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform)
 export const MOD = isMac ? '⌘' : 'Ctrl'
+
+type SectionHeadProps = { index: string; title: string; id?: string; note?: ReactNode; children?: ReactNode }
+
+/** Sheet section header: grid bubble, title, a rule running to the edge, optional tools. */
+export function SectionHead({ index, title, id, note, children }: SectionHeadProps) {
+  return (
+    <div className="section-head">
+      <span className="bubble bubble-sm" aria-hidden="true">
+        {index}
+      </span>
+      <h2 id={id}>{title}</h2>
+      {note && <span className="section-note">{note}</span>}
+      <span className="section-rule" aria-hidden="true" />
+      {children}
+    </div>
+  )
+}

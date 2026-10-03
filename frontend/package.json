@@ -10,11 +10,11 @@
     "typecheck": "tsc -b",
     "test": "vitest run",
     "screenshots": "node scripts/screenshots.mjs",
-    "smoke": "node scripts/smoke.mjs"
+    "smoke": "node scripts/smoke.mjs",
+    "brand": "node scripts/brand.mjs"
   },
   "dependencies": {
-    "@fontsource/ibm-plex-mono": "^5.3.0",
-    "@fontsource/ibm-plex-sans": "^5.3.0",
+    "@fontsource-variable/archivo": "^5.3.0",
     "react": "^19.3.0",
     "react-dom": "^19.3.0"
   },

@@ -2,6 +2,7 @@
   Styles for server-rendered plan SVGs (backend/app/drawing/sheet.py).
   Class names here are a contract with the drawing module.
   Thin lines use non-scaling strokes so they stay crisp at any zoom.
+  Zone fills reference the patterns in components/PlanPatterns.tsx.
 */
 
 .pt-plan {
@@ -12,7 +13,8 @@
 }
 
 .pt-plan text {
-  font-family: var(--font-sans);
+  font-family: var(--font);
+  font-variant-numeric: tabular-nums;
 }
 
 .pt-plan .pt-furniture,
@@ -20,38 +22,34 @@
 .pt-plan .pt-openings,
 .pt-plan .pt-labels,
 .pt-plan .pt-dims,
-.pt-plan .pt-annot {
+.pt-plan .pt-annot,
+.pt-plan .pt-highlight {
   pointer-events: none;
 }
 
-/* Rooms ------------------------------------------------------------- */
+/* Rooms: tint plus hatch per zone ----------------------------------- */
 .pt-plan .room {
-  fill: var(--z);
   stroke: none;
   cursor: pointer;
-  transition: fill 0.15s var(--ease);
 }
-.pt-plan .zone-public { --z: var(--zone-public); }
-.pt-plan .zone-private { --z: var(--zone-private); }
-.pt-plan .zone-service { --z: var(--zone-service); }
-.pt-plan .zone-circulation { --z: var(--zone-circulation); }
-.pt-plan .room.is-hover { fill: color-mix(in srgb, var(--accent) 14%, var(--z)); }
-.pt-plan .room.is-selected { fill: color-mix(in srgb, var(--accent) 26%, var(--z)); }
-.pt-plan .room.is-flagged { fill: color-mix(in srgb, var(--err) 22%, var(--z)); }
+.pt-plan .room.zone-public { fill: url(#zp-public); }
+.pt-plan .room.zone-private { fill: url(#zp-private); }
+.pt-plan .room.zone-service { fill: url(#zp-service); }
+.pt-plan .room.zone-circulation { fill: var(--zone-circulation); }
 
 /* Structure --------------------------------------------------------- */
 .pt-plan .wall { fill: var(--plan-wall); }
 .pt-plan .window { fill: var(--canvas); stroke: var(--plan-wall); stroke-width: 1px; vector-effect: non-scaling-stroke; }
 .pt-plan .window-glass { stroke: var(--plan-wall); stroke-width: 0.8px; vector-effect: non-scaling-stroke; }
-.pt-plan .door-leaf { stroke: var(--plan-wall); stroke-width: 2px; vector-effect: non-scaling-stroke; stroke-linecap: round; }
-.pt-plan .door-swing { stroke: var(--plan-wall); stroke-width: 0.75px; fill: none; vector-effect: non-scaling-stroke; opacity: 0.7; }
+.pt-plan .door-leaf { stroke: var(--plan-wall); stroke-width: 1.8px; vector-effect: non-scaling-stroke; stroke-linecap: square; }
+.pt-plan .door-swing { stroke: var(--plan-wall); stroke-width: 0.6px; fill: none; vector-effect: non-scaling-stroke; stroke-dasharray: 2 2; opacity: 0.75; }
 .pt-plan .door-garage { stroke: var(--plan-wall); stroke-width: 1.2px; stroke-dasharray: 6 4; vector-effect: non-scaling-stroke; }
-.pt-plan .boundary { stroke: var(--plan-label-3); stroke-width: 0.8px; stroke-dasharray: 4 4; vector-effect: non-scaling-stroke; opacity: 0.6; }
+.pt-plan .boundary { stroke: var(--plan-label-3); stroke-width: 0.8px; stroke-dasharray: 8 3 2 3; vector-effect: non-scaling-stroke; opacity: 0.7; }
 
-/* Furniture --------------------------------------------------------- */
-.pt-plan .fx { fill: var(--plan-fx-fill); stroke: var(--plan-fx); stroke-width: 0.8px; vector-effect: non-scaling-stroke; }
-.pt-plan .fx-fill { fill: var(--plan-fx-solid); stroke: var(--plan-fx); stroke-width: 0.8px; vector-effect: non-scaling-stroke; }
-.pt-plan .fx-line { fill: none; stroke: var(--plan-fx); stroke-width: 0.7px; vector-effect: non-scaling-stroke; }
+/* Furniture: thinner, lighter pen ----------------------------------- */
+.pt-plan .fx { fill: var(--plan-fx-fill); stroke: var(--plan-fx); stroke-width: 0.75px; vector-effect: non-scaling-stroke; }
+.pt-plan .fx-fill { fill: var(--plan-fx-solid); stroke: var(--plan-fx); stroke-width: 0.75px; vector-effect: non-scaling-stroke; }
+.pt-plan .fx-line { fill: none; stroke: var(--plan-fx); stroke-width: 0.65px; vector-effect: non-scaling-stroke; }
 .pt-plan .fx-thin { fill: none; stroke: var(--plan-fx); stroke-width: 0.5px; vector-effect: non-scaling-stroke; opacity: 0.8; }
 .pt-plan .fx-dash { fill: none; stroke: var(--plan-fx); stroke-width: 0.6px; stroke-dasharray: 3 3; vector-effect: non-scaling-stroke; }
 .pt-plan .stair { stroke: var(--plan-fx); stroke-width: 0.7px; vector-effect: non-scaling-stroke; }
@@ -63,23 +61,70 @@
   paint-order: stroke;
   stroke: var(--plan-halo);
   stroke-width: 3px;
-  stroke-linejoin: round;
+  stroke-linejoin: miter;
   vector-effect: non-scaling-stroke;
 }
-.pt-plan .label-name { fill: var(--plan-label); font-weight: 600; letter-spacing: 0.04em; }
-.pt-plan .label-area { fill: var(--plan-label-2); font-family: var(--font-mono); }
-.pt-plan .label-dim { fill: var(--plan-label-3); font-family: var(--font-mono); }
-.pt-plan .label-note { fill: var(--plan-label-3); font-weight: 600; }
+.pt-plan .label-name { fill: var(--plan-label); font-weight: 650; font-stretch: var(--semi); letter-spacing: 0.06em; }
+.pt-plan .label-area { fill: var(--plan-label-2); font-weight: 450; }
+.pt-plan .label-dim { fill: var(--plan-label-3); font-stretch: var(--semi); }
+.pt-plan .label-note { fill: var(--plan-label-3); font-weight: 600; font-stretch: var(--semi); letter-spacing: 0.04em; }
 
 /* Dimensions and annotation ----------------------------------------- */
 .pt-plan .dim,
-.pt-plan .dim-ext { stroke: var(--plan-dim); stroke-width: 0.7px; vector-effect: non-scaling-stroke; }
+.pt-plan .dim-ext { stroke: var(--plan-dim); stroke-width: 0.6px; vector-effect: non-scaling-stroke; }
 .pt-plan .dim-tick { stroke: var(--plan-label); stroke-width: 1.4px; vector-effect: non-scaling-stroke; }
-.pt-plan .dim-text { fill: var(--plan-dim); font-family: var(--font-mono); }
+.pt-plan .dim-text { fill: var(--plan-dim); font-stretch: var(--semi); }
 .pt-plan .annot-line { fill: none; stroke: var(--plan-label); stroke-width: 0.9px; vector-effect: non-scaling-stroke; }
 .pt-plan .annot-fill { fill: var(--plan-label); stroke: var(--plan-label); stroke-width: 0.9px; vector-effect: non-scaling-stroke; }
-.pt-plan .annot-text { fill: var(--plan-dim); font-family: var(--font-mono); }
-.pt-plan .annot-title { fill: var(--plan-label); font-weight: 600; letter-spacing: 0.12em; }
+.pt-plan .annot-text { fill: var(--plan-dim); font-stretch: var(--semi); }
+.pt-plan .annot-title { fill: var(--plan-label); font-weight: 750; font-stretch: var(--wide); letter-spacing: 0.14em; }
+
+/* Redline overlay (built by PlanCanvas) ------------------------------ */
+.pt-plan .hl-select {
+  fill: var(--accent-soft);
+  stroke: var(--accent);
+  stroke-width: 1.5px;
+  vector-effect: non-scaling-stroke;
+}
+.pt-plan .hl-brackets {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 2.5px;
+  stroke-linecap: square;
+  vector-effect: non-scaling-stroke;
+}
+.pt-plan .hl-hover {
+  fill: none;
+  stroke: var(--ink);
+  stroke-width: 1px;
+  stroke-dasharray: 5 3;
+  vector-effect: non-scaling-stroke;
+  opacity: 0.75;
+}
+.pt-plan .hl-flag {
+  fill: var(--err-soft);
+  stroke: var(--err);
+  stroke-width: 1.2px;
+  stroke-dasharray: 6 3;
+  vector-effect: non-scaling-stroke;
+}
+
+/* Plot-in: a new drawing is pen-plotted, walls first ----------------- */
+.canvas-stage .pt-zones { animation: plot-fade 0.35s var(--ease) both; }
+.canvas-stage .pt-walls,
+.canvas-stage .pt-openings { animation: plot-wipe 0.6s var(--plot) both; }
+.canvas-stage .pt-furniture { animation: plot-wipe 0.6s var(--plot) 0.15s both; }
+.canvas-stage .pt-labels,
+.canvas-stage .pt-dims,
+.canvas-stage .pt-annot { animation: plot-fade 0.3s var(--ease) 0.45s both; }
+
+@keyframes plot-wipe {
+  from { clip-path: inset(0 100% 0 0); }
+  to { clip-path: inset(0 0 0 0); }
+}
+@keyframes plot-fade {
+  from { opacity: 0; }
+}
 
 /* Units and layer toggles ------------------------------------------- */
 .units-metric .pt-plan .u-i,
@@ -89,7 +134,7 @@
 .hide-dims .pt-plan .pt-dims,
 .hide-dims .pt-plan .pt-annot { display: none; }
 
-/* Thumbnails: walls and zones only ----------------------------------- */
+/* Thumbnails: walls and flat zone tints only ------------------------- */
 .thumb .pt-plan .pt-furniture,
 .thumb .pt-plan .pt-labels,
 .thumb .pt-plan .pt-dims,
@@ -97,3 +142,6 @@
 .thumb .pt-plan .door-swing,
 .thumb .pt-plan .boundary { display: none; }
 .thumb .pt-plan .room { cursor: inherit; }
+.thumb .pt-plan .room.zone-public { fill: var(--zone-public); }
+.thumb .pt-plan .room.zone-private { fill: var(--zone-private); }
+.thumb .pt-plan .room.zone-service { fill: var(--zone-service); }

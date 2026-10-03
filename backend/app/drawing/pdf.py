@@ -3,22 +3,42 @@
 from __future__ import annotations
 
 import math
+from functools import lru_cache
 from io import BytesIO
+from pathlib import Path
 
 from reportlab.lib.pagesizes import A3, landscape
 from reportlab.lib.units import mm
+from reportlab.pdfbase import pdfmetrics
+from reportlab.pdfbase.ttfonts import TTFont
 from reportlab.pdfgen import canvas
 
 from app.drawing.sheet import Arc, Circle, Ellipse, Line, Poly, Sheet, Text
-from app.drawing.style import resolve
+from app.drawing.style import INK, resolve
+from app.drawing.titleblock import HEIGHT, TitleInfo, title_block
 
+FONTS = Path(__file__).parent / "fonts"
 SCALES = (50, 100, 150, 200, 250, 300, 400, 500)
-MARGIN = 12 * mm
-TITLE_H = 22 * mm
+TRIM = 6 * mm  # outer border
+FRAME = 11 * mm  # inner border; the band between carries zone markers
+TB_UNIT = 12 * mm  # title block drawing unit
+MARGIN = FRAME + 6 * mm
+TITLE_H = HEIGHT * TB_UNIT + 6 * mm
 GAP_M = 1.0
 
 
-def render_pdf(sheets: list[Sheet], title_lines: list[str]) -> bytes:
+@lru_cache(maxsize=1)
+def _fonts() -> tuple[str, str]:
+    # Archivo ships with the app (fonts/, SIL OFL) so exports match the screen.
+    try:
+        pdfmetrics.registerFont(TTFont("Archivo", str(FONTS / "Archivo-Regular.ttf")))
+        pdfmetrics.registerFont(TTFont("Archivo-SemiBold", str(FONTS / "Archivo-SemiBold.ttf")))
+        return "Archivo", "Archivo-SemiBold"
+    except Exception:  # pragma: no cover - missing or unreadable font files
+        return "Helvetica", "Helvetica-Bold"
+
+
+def render_pdf(sheets: list[Sheet], info: TitleInfo) -> bytes:
     page_w, page_h = landscape(A3)
     avail_w = page_w - 2 * MARGIN
     avail_h = page_h - 2 * MARGIN - TITLE_H
@@ -29,8 +49,10 @@ def render_pdf(sheets: list[Sheet], title_lines: list[str]) -> bytes:
 
     buf = BytesIO()
     c = canvas.Canvas(buf, pagesize=(page_w, page_h))
-    c.setTitle(title_lines[0] if title_lines else "Parti plan")
+    c.setTitle(f"Parti · {info.title}")
     c.setAuthor("Parti")
+
+    _frame(c, page_w, page_h)
 
     origin_x = MARGIN + (avail_w - total_w * k) / 2
     origin_y = MARGIN + TITLE_H + (avail_h - total_h * k) / 2
@@ -47,20 +69,48 @@ def render_pdf(sheets: list[Sheet], title_lines: list[str]) -> bytes:
                 _draw(c, item, P, k)
         offset += (maxx - minx) + GAP_M
 
-    # Title block.
-    c.setStrokeColorRGB(0.11, 0.11, 0.13)
-    c.setLineWidth(0.6)
-    c.line(MARGIN, MARGIN + TITLE_H - 4 * mm, page_w - MARGIN, MARGIN + TITLE_H - 4 * mm)
-    for i, line in enumerate(title_lines):
-        c.setFont("Helvetica-Bold" if i == 0 else "Helvetica", 13 if i == 0 else 8.5)
-        shade = 0.11 if i == 0 else 0.33
-        c.setFillColorRGB(shade, shade, shade + 0.01)
-        c.drawString(MARGIN, MARGIN + TITLE_H - 10 * mm - i * 5 * mm, line.replace("1:100", f"1:{scale}"))
-    c.setFont("Helvetica", 8.5)
-    c.drawRightString(page_w - MARGIN, MARGIN + TITLE_H - 10 * mm, f"Scale 1:{scale} @ A3")
+    # Title block along the bottom of the frame.
+    def T(p):
+        return FRAME + p[0] * TB_UNIT, FRAME + p[1] * TB_UNIT
+
+    for item in title_block((page_w - 2 * FRAME) / TB_UNIT, info, f"Scale 1:{scale} at A3"):
+        _draw(c, item, T, TB_UNIT)
     c.showPage()
     c.save()
     return buf.getvalue()
+
+
+def _frame(c, page_w: float, page_h: float) -> None:
+    """Drawing-sheet border: trim line, frame, and lettered/numbered zones."""
+    regular, _ = _fonts()
+    _color(c, INK, False)
+    _color(c, INK, True)
+    c.setDash([])
+    c.setLineWidth(0.3)
+    c.rect(TRIM, TRIM, page_w - 2 * TRIM, page_h - 2 * TRIM)
+    c.setLineWidth(1.0)
+    c.rect(FRAME, FRAME, page_w - 2 * FRAME, page_h - 2 * FRAME)
+    c.setLineWidth(0.3)
+    c.setFont(regular, 6.5)
+    mid = (TRIM + FRAME) / 2
+    cols, rows = 8, 6
+    for i in range(cols):
+        x0 = FRAME + (page_w - 2 * FRAME) * i / cols
+        x1 = FRAME + (page_w - 2 * FRAME) * (i + 1) / cols
+        if i:
+            c.line(x0, TRIM, x0, FRAME)
+            c.line(x0, page_h - FRAME, x0, page_h - TRIM)
+        for y in (mid - 2.2, page_h - mid - 2.2):
+            c.drawCentredString((x0 + x1) / 2, y, str(i + 1))
+    for j in range(rows):
+        y0 = FRAME + (page_h - 2 * FRAME) * j / rows
+        y1 = FRAME + (page_h - 2 * FRAME) * (j + 1) / rows
+        if j:
+            c.line(TRIM, y0, FRAME, y0)
+            c.line(page_w - FRAME, y0, page_w - TRIM, y0)
+        letter = "ABCDEF"[rows - 1 - j]
+        for x in (mid, page_w - mid):
+            c.drawCentredString(x, (y0 + y1) / 2 - 2.2, letter)
 
 
 def _color(c, hex_color: str, fill: bool) -> None:
@@ -93,9 +143,10 @@ def _draw(c, item, P, k: float) -> None:
         c.translate(x, y)
         if item.rotate:
             c.rotate(item.rotate)
-        c.setFont("Helvetica-Bold" if style.bold else "Helvetica", size)
+        regular, bold = _fonts()
+        c.setFont(bold if style.bold else regular, size)
         draw = {"middle": c.drawCentredString, "start": c.drawString, "end": c.drawRightString}[item.anchor]
-        draw(0, 0, item.text)
+        draw(0, 0, item.text, charSpace=style.spacing * size)
         c.restoreState()
         return
     fill, stroke = _apply(c, style, k)

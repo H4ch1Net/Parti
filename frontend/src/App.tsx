@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ApiError, generate, getExamples, getRoomTypes, interpret } from './api'
 import { BriefPanel, type RecentBrief } from './components/BriefPanel'
-import { Segmented, Spinner } from './components/controls'
+import { Axo } from './components/Axo'
+import { Kbd, Segmented, SectionHead, Spinner } from './components/controls'
 import { DetailsPanel, type DetailTab } from './components/DetailsPanel'
 import { Icon } from './components/Icon'
-import { type CanvasController, PlanCanvas } from './components/PlanCanvas'
+import { type CanvasController, type CanvasRoom, PlanCanvas } from './components/PlanCanvas'
+import { PlanPatterns } from './components/PlanPatterns'
 import { RoomInspector } from './components/RoomInspector'
 import { ShortcutsDialog } from './components/ShortcutsDialog'
 import { type ThemePref, TopBar } from './components/TopBar'
@@ -148,10 +150,19 @@ export default function App() {
   const candidate = candidates.find((c) => c.id === selectedId) ?? null
   const levels = candidate?.floors ?? 1
   const svg = candidate ? (result?.drawings[candidate.id]?.[Math.min(floor, levels) - 1] ?? '') : ''
-  const flagged = useMemo(
-    () => (candidate ? candidate.validation.issues.filter((i) => i.severity === 'error').flatMap((i) => i.room_ids) : []),
-    [candidate],
+  const canvasRooms = useMemo<CanvasRoom[]>(
+    () => (candidate ? candidate.rooms.filter((r) => r.floor === Math.min(floor, levels)).map((r) => ({ id: r.id, polygon: r.polygon })) : []),
+    [candidate, floor, levels],
   )
+  const flagged = useMemo(() => (candidate ? candidate.validation.issues.filter((i) => i.severity === 'error').flatMap((i) => i.room_ids) : []), [candidate])
+
+  // Dock the inspector on the side of the plan away from the selected room.
+  const inspectorSide = useMemo(() => {
+    const room = candidate?.rooms.find((r) => r.id === selectedRoom)
+    if (!candidate || !room) return 'right'
+    const xs = room.polygon.map((pt) => pt[0])
+    return (Math.min(...xs) + Math.max(...xs)) / 2 > candidate.footprint.width_m / 2 ? 'left' : 'right'
+  }, [candidate, selectedRoom])
 
   const selectRoom = useCallback(
     (id: string | null) => {
@@ -200,180 +211,207 @@ export default function App() {
       <a className="skip-link" href="#plan-stage">
         Skip to plan
       </a>
-      <TopBar units={units} theme={theme} onUnits={setUnits} onTheme={setTheme} onHelp={() => setHelp(true)} />
+      <div className="sheet">
+        <TopBar units={units} theme={theme} onUnits={setUnits} onTheme={setTheme} onHelp={() => setHelp(true)} />
 
-      <main className="workspace">
-        <BriefPanel
-          prompt={prompt}
-          brief={brief}
-          briefEdited={briefEdited}
-          interpreting={interpreting}
-          interpretError={interpretError}
-          generating={generating}
-          examples={examples}
-          recent={recent}
-          roomTypes={roomTypes}
-          units={units}
-          onPromptChange={setPrompt}
-          onBriefChange={(b) => {
-            // Interpreter notes describe the text, not a hand-edited program.
-            setBrief({ ...b, notes: [] })
-            setBriefEdited(true)
-          }}
-          onResetBrief={() => setRereadToken((n) => n + 1)}
-          onGenerate={() => runGenerate()}
-          onPickRecent={(r) => {
-            skipInterpret.current = true
-            setPrompt(r.prompt)
-            setBrief(r.brief)
-            setBriefEdited(false)
-            runGenerate(r.brief)
-          }}
-          onClearRecent={() => setRecent([])}
-        />
+        <main className="workspace">
+          <BriefPanel
+            prompt={prompt}
+            brief={brief}
+            briefEdited={briefEdited}
+            interpreting={interpreting}
+            interpretError={interpretError}
+            generating={generating}
+            examples={examples}
+            recent={recent}
+            roomTypes={roomTypes}
+            units={units}
+            onPromptChange={setPrompt}
+            onBriefChange={(b) => {
+              // Interpreter notes describe the text, not a hand-edited program.
+              setBrief({ ...b, notes: [] })
+              setBriefEdited(true)
+            }}
+            onResetBrief={() => setRereadToken((n) => n + 1)}
+            onGenerate={() => runGenerate()}
+            onPickRecent={(r) => {
+              skipInterpret.current = true
+              setPrompt(r.prompt)
+              setBrief(r.brief)
+              setBriefEdited(false)
+              runGenerate(r.brief)
+            }}
+            onClearRecent={() => setRecent([])}
+          />
 
-        <section className="stage" id="plan-stage" aria-label="Plan">
-          <div className={`canvas-frame ${layerClass}`}>
-            {candidate && (
-              <div className="canvas-toolbar" role="toolbar" aria-label="Plan view">
-                <div className="toolbar-group">
+          <section className="stage" id="plan-stage" aria-labelledby="plan-title">
+            <SectionHead
+              index="2"
+              title="Plan"
+              id="plan-title"
+              note={candidate ? `${candidate.label}${levels > 1 ? ` · Level ${Math.min(floor, levels)}` : ''}` : undefined}
+            >
+              {candidate && (
+                <div className="plan-tools" role="toolbar" aria-label="Plan view">
                   {levels > 1 && (
                     <Segmented
                       label="Level"
                       size="sm"
                       value={Math.min(floor, levels)}
-                      options={Array.from({ length: levels }, (_, i) => ({ value: i + 1, label: `Level ${i + 1}` }))}
+                      options={Array.from({ length: levels }, (_, i) => ({ value: i + 1, label: `L${i + 1}`, title: `Level ${i + 1} (${i + 1})` }))}
                       onChange={(f) => {
                         setFloor(f)
                         setSelectedRoom(null)
                       }}
                     />
                   )}
-                </div>
-                <div className="toolbar-group">
-                  {(
-                    [
-                      ['furniture', 'Furniture', 'F'],
-                      ['labels', 'Labels', 'L'],
-                      ['dims', 'Dimensions', 'D'],
-                    ] as const
-                  ).map(([key, label, k]) => (
-                    <button
-                      key={key}
-                      type="button"
-                      className={`toggle ${layers[key] ? 'is-on' : ''}`}
-                      aria-pressed={layers[key]}
-                      title={`${label} (${k})`}
-                      onClick={() => setLayers({ ...layers, [key]: !layers[key] })}
-                    >
-                      {label}
+                  <div className="layer-toggles">
+                    {(
+                      [
+                        ['furniture', 'Furniture', 'F'],
+                        ['labels', 'Labels', 'L'],
+                        ['dims', 'Dims', 'D'],
+                      ] as const
+                    ).map(([key, label, k]) => (
+                      <button
+                        key={key}
+                        type="button"
+                        className={`toggle ${layers[key] ? 'is-on' : ''}`}
+                        aria-pressed={layers[key]}
+                        title={`${label} layer (${k})`}
+                        onClick={() => setLayers({ ...layers, [key]: !layers[key] })}
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                  <div className="zoom">
+                    <button type="button" className="icon-btn" onClick={() => canvas.current?.zoomBy(1 / 1.3)} aria-label="Zoom out" title="Zoom out (−)">
+                      <Icon name="minus" />
                     </button>
-                  ))}
-                  <span className="toolbar-sep" />
-                  <button type="button" className="icon-btn" onClick={() => canvas.current?.zoomBy(1 / 1.3)} aria-label="Zoom out" title="Zoom out (−)">
-                    <Icon name="minus" />
-                  </button>
-                  <button type="button" className="icon-btn" onClick={() => canvas.current?.fit()} aria-label="Fit to view" title="Fit (0)">
-                    <Icon name="fit" />
-                  </button>
-                  <button type="button" className="icon-btn" onClick={() => canvas.current?.zoomBy(1.3)} aria-label="Zoom in" title="Zoom in (+)">
-                    <Icon name="plus" />
+                    <button type="button" className="icon-btn" onClick={() => canvas.current?.fit()} aria-label="Fit to view" title="Fit (0)">
+                      <Icon name="fit" />
+                    </button>
+                    <button type="button" className="icon-btn" onClick={() => canvas.current?.zoomBy(1.3)} aria-label="Zoom in" title="Zoom in (+)">
+                      <Icon name="plus" />
+                    </button>
+                  </div>
+                </div>
+              )}
+            </SectionHead>
+
+            <div className={`canvas-frame ${layerClass} ${svg ? 'has-plan' : ''}`}>
+              <span className="crop crop-tl" aria-hidden="true" />
+              <span className="crop crop-tr" aria-hidden="true" />
+              <span className="crop crop-bl" aria-hidden="true" />
+              <span className="crop crop-br" aria-hidden="true" />
+
+              {svg ? (
+                <PlanCanvas
+                  svg={svg}
+                  rooms={canvasRooms}
+                  selectedRoom={selectedRoom}
+                  hoverRoom={hoverRoom}
+                  flaggedRooms={flagged}
+                  label={planLabel}
+                  onHoverRoom={setHoverRoom}
+                  onSelectRoom={selectRoom}
+                  controllerRef={canvas}
+                />
+              ) : (
+                <EmptyStage generating={generating} error={genError} onRetry={() => runGenerate()} />
+              )}
+
+              {generating && candidate && (
+                <div className="canvas-busy" role="status">
+                  <Spinner /> Exploring layouts…
+                </div>
+              )}
+              {genError && candidate && (
+                <div className="canvas-alert" role="alert">
+                  <Icon name="error" />
+                  <span>{genError}</span>
+                  <button type="button" className="link-btn" onClick={() => runGenerate()}>
+                    Retry
                   </button>
                 </div>
-              </div>
-            )}
+              )}
 
-            {svg ? (
-              <PlanCanvas
-                svg={svg}
-                selectedRoom={selectedRoom}
-                hoverRoom={hoverRoom}
-                flaggedRooms={flagged}
-                label={planLabel}
-                onHoverRoom={setHoverRoom}
-                onSelectRoom={selectRoom}
-                controllerRef={canvas}
-              />
-            ) : (
-              <EmptyStage generating={generating} error={genError} onRetry={() => runGenerate()} />
-            )}
+              {candidate && (
+                <div className="canvas-foot">
+                  <ul className="legend" aria-label="Zone key">
+                    {(['public', 'private', 'service', 'circulation'] as const).map((z) => (
+                      <li key={z}>
+                        <span className={`swatch zone-${z}`} aria-hidden="true" />
+                        {z.charAt(0).toUpperCase() + z.slice(1)}
+                      </li>
+                    ))}
+                  </ul>
+                  <span className="canvas-hint">Scroll to zoom · drag to pan · click a room</span>
+                </div>
+              )}
 
-            {generating && candidate && (
-              <div className="canvas-busy" role="status">
-                <Spinner /> Exploring layouts…
-              </div>
-            )}
-            {genError && candidate && (
-              <div className="canvas-alert" role="alert">
-                <Icon name="alert" />
-                <span>{genError}</span>
-                <button type="button" className="link-btn" onClick={() => runGenerate()}>
-                  Retry
-                </button>
-              </div>
-            )}
-
-            {candidate && !selectedRoom && (
-              <ul className="legend" aria-label="Zone colours">
-                {(['public', 'private', 'service', 'circulation'] as const).map((z) => (
-                  <li key={z}>
-                    <span className={`zone-dot zone-${z}`} aria-hidden="true" />
-                    {z.charAt(0).toUpperCase() + z.slice(1)}
-                  </li>
-                ))}
-              </ul>
-            )}
-
-            {candidate && selectedRoom && (
-              <RoomInspector candidate={candidate} roomId={selectedRoom} units={units} onClose={() => setSelectedRoom(null)} onSelectRoom={selectRoom} />
-            )}
-          </div>
-
-          {result && candidates.length > 0 && (
-            <div className="variants-wrap">
-              <div className="variants-head">
-                <h2>Variants</h2>
-                <span className="muted small">
-                  {candidates.length} plans · {(result.elapsed_ms / 1000).toFixed(1)} s · <span className="kbd-hint">← → to browse</span>
-                </span>
-              </div>
-              <VariantStrip
-                candidates={candidates}
-                drawings={result.drawings}
-                selectedId={selectedId}
-                units={units}
-                onSelect={(id) => {
-                  setSelectedId(id)
-                  setSelectedRoom(null)
-                }}
-              />
+              {candidate && selectedRoom && (
+                <RoomInspector
+                  candidate={candidate}
+                  roomId={selectedRoom}
+                  units={units}
+                  side={inspectorSide}
+                  onClose={() => setSelectedRoom(null)}
+                  onSelectRoom={selectRoom}
+                />
+              )}
             </div>
+
+            {result && candidates.length > 0 && (
+              <div className="variants-wrap">
+                <SectionHead index="3" title="Variants" note={`${candidates.length} plans · ${(result.elapsed_ms / 1000).toFixed(1)} s`}>
+                  <span className="kbd-hint" aria-hidden="true">
+                    <Kbd>←</Kbd>
+                    <Kbd>→</Kbd>
+                  </span>
+                </SectionHead>
+                <VariantStrip
+                  candidates={candidates}
+                  drawings={result.drawings}
+                  selectedId={selectedId}
+                  units={units}
+                  onSelect={(id) => {
+                    setSelectedId(id)
+                    setSelectedRoom(null)
+                  }}
+                />
+              </div>
+            )}
+          </section>
+
+          {candidate && result ? (
+            <DetailsPanel
+              candidate={candidate}
+              targetArea={result.brief.target_area_sqm}
+              units={units}
+              tab={tab}
+              onTab={setTab}
+              selectedRoom={selectedRoom}
+              hoverRoom={hoverRoom}
+              onSelectRoom={selectRoom}
+              onHoverRoom={setHoverRoom}
+              shareUrl={shareUrl}
+              briefPrompt={result.brief.raw_prompt}
+            />
+          ) : (
+            <aside className="panel details details-empty" aria-hidden="true">
+              <SectionHead index="4" title="Sheet" />
+              <div className="tb-placeholder">
+                <span>Title block</span>
+                <small>{generating ? 'Drawing…' : 'Fills in when a plan is drawn'}</small>
+              </div>
+            </aside>
           )}
-        </section>
+        </main>
+      </div>
 
-        {candidate && result ? (
-          <DetailsPanel
-            candidate={candidate}
-            targetArea={result.brief.target_area_sqm}
-            units={units}
-            tab={tab}
-            onTab={setTab}
-            selectedRoom={selectedRoom}
-            hoverRoom={hoverRoom}
-            onSelectRoom={selectRoom}
-            onHoverRoom={setHoverRoom}
-            shareUrl={shareUrl}
-            briefPrompt={result.brief.raw_prompt}
-          />
-        ) : (
-          <aside className="panel details details-empty" aria-hidden="true">
-            <div className="skeleton skeleton-title" />
-            <div className="skeleton skeleton-line" />
-            <div className="skeleton skeleton-block" />
-          </aside>
-        )}
-      </main>
-
+      <PlanPatterns />
       <ShortcutsDialog open={help} onClose={() => setHelp(false)} />
       <div className="sr-only" aria-live="polite">
         {announcement}
@@ -386,14 +424,14 @@ function EmptyStage({ generating, error, onRetry }: { generating: boolean; error
   if (error) {
     return (
       <div className="stage-message" role="alert">
-        <Icon name="alert" size={22} />
-        <h3>Could not generate a plan</h3>
+        <Axo state="error" />
+        <h3>Could not draw a plan</h3>
         <p>{error}</p>
         <p className="fine">
           Start the API with <code>uvicorn app.main:app --reload</code> in <code>backend/</code>, then retry.
         </p>
         <button type="button" className="btn" onClick={onRetry}>
-          Retry
+          <Icon name="reset" /> Retry
         </button>
       </div>
     )
@@ -401,11 +439,7 @@ function EmptyStage({ generating, error, onRetry }: { generating: boolean; error
   if (generating) {
     return (
       <div className="stage-message" role="status">
-        <div className="drafting" aria-hidden="true">
-          <span />
-          <span />
-          <span />
-        </div>
+        <Axo state="loading" />
         <h3>Exploring layouts…</h3>
         <p className="muted">Testing room arrangements, doors, daylight and furniture.</p>
       </div>
@@ -413,9 +447,9 @@ function EmptyStage({ generating, error, onRetry }: { generating: boolean; error
   }
   return (
     <div className="stage-message">
-      <Icon name="sparkle" size={22} />
+      <Axo />
       <h3>Describe a building to begin</h3>
-      <p className="muted">Write a brief on the left or pick an example, then generate.</p>
+      <p className="muted">Write a brief or pick an example, then generate.</p>
     </div>
   )
 }

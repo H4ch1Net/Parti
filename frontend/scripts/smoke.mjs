@@ -30,9 +30,9 @@ check((await planRooms(page, 'bedroom')) === 3, 'edited program is generated')
 const hash = await page.evaluate(() => location.hash)
 check(hash.startsWith('#b='), 'share link is written to the URL')
 
-const before = await page.locator('.variant.is-selected .variant-name').innerText()
+const before = await page.locator('.variant.is-selected .bubble').innerText()
 await page.keyboard.press('ArrowRight')
-check((await page.locator('.variant.is-selected .variant-name').innerText()) !== before, 'arrow keys switch variants')
+check((await page.locator('.variant.is-selected .bubble').innerText()) !== before, 'arrow keys switch variants')
 
 const vb = await page.getAttribute('.canvas-stage svg', 'viewBox')
 await page.mouse.move(700, 400)

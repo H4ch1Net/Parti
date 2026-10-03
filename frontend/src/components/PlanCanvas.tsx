@@ -7,8 +7,11 @@ export type CanvasController = {
   fit: () => void
 }
 
+export type CanvasRoom = { id: string; polygon: number[][] }
+
 type Props = {
   svg: string
+  rooms: CanvasRoom[]
   selectedRoom: string | null
   hoverRoom: string | null
   flaggedRooms: string[]
@@ -36,7 +39,9 @@ function toAspect(b: Box, cw: number, ch: number): Box {
   return { x: b.x - (w - b.w) / 2, y: b.y, w, h: b.h }
 }
 
-export function PlanCanvas({ svg, selectedRoom, hoverRoom, flaggedRooms, label, onHoverRoom, onSelectRoom, controllerRef }: Props) {
+const SVG_NS = 'http://www.w3.org/2000/svg'
+
+export function PlanCanvas({ svg, rooms, selectedRoom, hoverRoom, flaggedRooms, label, onHoverRoom, onSelectRoom, controllerRef }: Props) {
   const hostRef = useRef<HTMLDivElement>(null)
   const stageRef = useRef<HTMLDivElement>(null)
   const base = useRef<Box | null>(null)
@@ -133,17 +138,54 @@ export function PlanCanvas({ svg, selectedRoom, hoverRoom, flaggedRooms, label, 
     return () => host.removeEventListener('wheel', onWheel)
   }, [zoomAt])
 
-  // Room highlight classes.
+  // Redline overlay above the walls: selection, hover and flagged rooms.
   useEffect(() => {
     const el = svgEl()
     if (!el) return
-    el.querySelectorAll<SVGElement>('.room').forEach((node) => {
-      const id = node.dataset.room ?? ''
-      node.classList.toggle('is-selected', id === selectedRoom)
-      node.classList.toggle('is-hover', id === hoverRoom && id !== selectedRoom)
-      node.classList.toggle('is-flagged', flaggedRooms.includes(id) && id !== selectedRoom && id !== hoverRoom)
-    })
-  }, [svg, selectedRoom, hoverRoom, flaggedRooms])
+    el.querySelector('.pt-highlight')?.remove()
+    const plan = parseBox(el.getAttribute('data-plan'))
+    if (!plan) return
+    const layer = document.createElementNS(SVG_NS, 'g')
+    layer.setAttribute('class', 'pt-highlight')
+    const draw = (id: string, cls: string) => {
+      const room = rooms.find((r) => r.id === id)
+      if (!room) return
+      const xs = room.polygon.map((p) => p[0])
+      const ys = room.polygon.map((p) => p[1])
+      const inset = 0.11
+      const x = plan.x + Math.min(...xs) + inset
+      const y = plan.y + plan.h - Math.max(...ys) + inset
+      const w = Math.max(...xs) - Math.min(...xs) - 2 * inset
+      const h = Math.max(...ys) - Math.min(...ys) - 2 * inset
+      const rect = document.createElementNS(SVG_NS, 'rect')
+      rect.setAttribute('x', String(x))
+      rect.setAttribute('y', String(y))
+      rect.setAttribute('width', String(Math.max(w, 0.05)))
+      rect.setAttribute('height', String(Math.max(h, 0.05)))
+      rect.setAttribute('class', cls)
+      layer.appendChild(rect)
+      if (cls === 'hl-select') {
+        // Crop-mark brackets just outside the corners.
+        const k = Math.min(0.45, w / 3, h / 3)
+        const o = 0.07
+        const [x0, y0, x1, y1] = [x - o, y - o, x + w + o, y + h + o]
+        const d = [
+          `M${x0} ${y0 + k}V${y0}H${x0 + k}`,
+          `M${x1 - k} ${y0}H${x1}V${y0 + k}`,
+          `M${x1} ${y1 - k}V${y1}H${x1 - k}`,
+          `M${x0 + k} ${y1}H${x0}V${y1 - k}`,
+        ].join(' ')
+        const path = document.createElementNS(SVG_NS, 'path')
+        path.setAttribute('d', d)
+        path.setAttribute('class', 'hl-brackets')
+        layer.appendChild(path)
+      }
+    }
+    flaggedRooms.forEach((id) => id !== selectedRoom && draw(id, 'hl-flag'))
+    if (hoverRoom && hoverRoom !== selectedRoom) draw(hoverRoom, 'hl-hover')
+    if (selectedRoom) draw(selectedRoom, 'hl-select')
+    el.appendChild(layer)
+  }, [svg, rooms, selectedRoom, hoverRoom, flaggedRooms])
 
   const roomAt = (target: EventTarget | null): string | null => {
     const node = (target as Element | null)?.closest?.('[data-room]') as SVGElement | null

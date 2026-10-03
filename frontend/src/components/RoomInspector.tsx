@@ -33,9 +33,9 @@ const FIXTURE_NAMES: Record<string, string> = {
   bench: 'Bench',
 }
 
-type Props = { candidate: Candidate; roomId: string; units: Units; onClose: () => void; onSelectRoom: (id: string) => void }
+type Props = { candidate: Candidate; roomId: string; units: Units; side?: 'left' | 'right'; onClose: () => void; onSelectRoom: (id: string) => void }
 
-export function RoomInspector({ candidate, roomId, units, onClose, onSelectRoom }: Props) {
+export function RoomInspector({ candidate, roomId, units, side = 'right', onClose, onSelectRoom }: Props) {
   const room = candidate.rooms.find((r) => r.id === roomId)
   if (!room) return null
   const byId = Object.fromEntries(candidate.rooms.map((r) => [r.id, r]))
@@ -49,7 +49,7 @@ export function RoomInspector({ candidate, roomId, units, onClose, onSelectRoom 
     candidate.fixtures
       .filter((f) => f.room_id === room.id)
       .reduce<Record<string, number>>((acc, f) => {
-        const name = f.type.startsWith('dining_table') ? `Table for ${f.type.split('_').pop()}` : FIXTURE_NAMES[f.type] ?? f.type
+        const name = f.type.startsWith('dining_table') ? `Table for ${f.type.split('_').pop()}` : (FIXTURE_NAMES[f.type] ?? f.type)
         acc[name] = (acc[name] ?? 0) + 1
         return acc
       }, {}),
@@ -58,9 +58,9 @@ export function RoomInspector({ candidate, roomId, units, onClose, onSelectRoom 
   const delta = room.target_area_sqm > 0 && room.type !== 'corridor' && room.type !== 'stair' ? room.area_sqm / room.target_area_sqm - 1 : null
 
   return (
-    <aside className="inspector" aria-label={`${room.name} details`}>
+    <aside className={`inspector inspector-${side}`} aria-label={`${room.name} details`}>
       <header>
-        <span className={`zone-dot zone-${room.zone}`} aria-hidden="true" />
+        <span className={`swatch zone-${room.zone}`} aria-hidden="true" />
         <div>
           <h3>{room.name}</h3>
           <p className="muted small">
@@ -86,7 +86,14 @@ export function RoomInspector({ candidate, roomId, units, onClose, onSelectRoom 
         <div>
           <dt>Daylight</dt>
           <dd className="mono">
-            {windows.length ? `${windows.length} window${windows.length > 1 ? 's' : ''} · ${Math.round(glazing * 100)}%` : 'No windows'}
+            {windows.length ? (
+              <>
+                {windows.length} window{windows.length > 1 ? 's' : ''}
+                <small className="delta">{Math.round(glazing * 100)}% glazing</small>
+              </>
+            ) : (
+              'None'
+            )}
           </dd>
         </div>
       </dl>

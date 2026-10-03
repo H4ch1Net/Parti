@@ -433,7 +433,7 @@ def build_sheet(c: Candidate, level: int, units: str = "both", annotate: bool = 
         vertical = b.w < 1.6 and b.h > b.w * 1.8
         avail = b.h if vertical else b.w
         name = r.name.upper()
-        size = _label_size(name, avail, 0.24, char_w=0.72)  # bold capitals with tracking
+        size = _label_size(name, avail, 0.24, char_w=0.78)  # tracked semibold capitals (Archivo)
         small = min(size * 0.82, 0.2)
         area_m, area_i = fmt.area(r.area_sqm, "metric"), fmt.area(r.area_sqm, "imperial")
         dim_m, dim_i = fmt.dims(r.width_m, r.depth_m, "metric"), fmt.dims(r.width_m, r.depth_m, "imperial")
@@ -446,7 +446,7 @@ def build_sheet(c: Candidate, level: int, units: str = "both", annotate: bool = 
         if show_dims:
             m, i = _txt(units, dim_m, dim_i)
             lines.append((m, i, small * 0.9, "label-dim"))
-        block_w = max(len(t) * sz * (0.72 if cls == "label-name" else 0.6) for t, _, sz, cls in lines)
+        block_w = max(len(t) * sz * (0.78 if cls == "label-name" else 0.6) for t, _, sz, cls in lines)
         block_h = sum(sz * 1.25 for _, _, sz, _ in lines)
         cx, cy = _label_anchor(b, block_w, block_h, vertical, furniture_boxes.get(r.id, []))
         acc = 0.0
@@ -501,13 +501,14 @@ def _dimensions(layer: Layer, rooms, W: float, D: float, units: str) -> None:
 
 
 def _annotations(layer: Layer, W: float, D: float, level: int, floors: int, units: str, title: str | None) -> None:
-    # North arrow (plans are drawn with the entry facade to the south).
-    cx, cy, r = W + 0.45, D + 0.55, 0.32
+    # North arrow (plans are drawn with the entry facade to the south): a
+    # circle with a split needle, solid on the west half.
+    cx, cy, r = W + 0.45, D + 0.5, 0.3
+    tip, tail, notch = (cx, cy + r * 1.05), cy - r * 0.62, (cx, cy - r * 0.3)
     layer.items.append(Circle((cx, cy), r, "annot-line"))
-    layer.items.append(
-        Poly([(cx, cy + r * 0.85), (cx - r * 0.45, cy - r * 0.6), (cx, cy - r * 0.3), (cx + r * 0.45, cy - r * 0.6)], "annot-fill")
-    )
-    layer.items.append(Text((cx, cy - r - 0.25), "N", 0.2, "annot-text"))
+    layer.items.append(Poly([tip, (cx - r * 0.42, tail), notch], "annot-fill"))
+    layer.items.append(Poly([tip, (cx + r * 0.42, tail), notch], "annot-line"))
+    layer.items.append(Text((cx, cy + r + 0.1), "N", 0.18, "annot-text"))
     # Level title.
     heading = title or (f"LEVEL {level}" if floors > 1 else "FLOOR PLAN")
     layer.items.append(Text((0.0, D + 0.45), heading.upper(), 0.3, "annot-title", anchor="start"))

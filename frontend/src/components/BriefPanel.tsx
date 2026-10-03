@@ -1,6 +1,6 @@
 import { formatArea } from '../lib/units'
 import type { Brief, Example, RoomTypeInfo, Units } from '../types'
-import { Kbd, MOD, Spinner } from './controls'
+import { Kbd, MOD, SectionHead, Spinner } from './controls'
 import { Icon } from './Icon'
 import { ProgramEditor } from './ProgramEditor'
 
@@ -40,14 +40,14 @@ export function BriefPanel(p: Props) {
   const b = p.brief
   return (
     <section className="panel brief" aria-labelledby="brief-title">
-      <header className="panel-head">
-        <h2 id="brief-title">Brief</h2>
-        <span className="muted small">Describe the building in plain language</span>
-      </header>
+      <SectionHead index="1" title="Brief" id="brief-title" />
 
       <div className="prompt-box">
+        <label className="field-label" htmlFor="brief-input">
+          Describe the building in plain language
+        </label>
         <textarea
-          aria-label="Describe the floor plan"
+          id="brief-input"
           value={p.prompt}
           rows={4}
           maxLength={2000}
@@ -61,7 +61,7 @@ export function BriefPanel(p: Props) {
           }}
         />
         <button type="button" className="btn btn-primary btn-block" onClick={p.onGenerate} disabled={p.generating || (!b && !p.prompt.trim())}>
-          {p.generating ? <Spinner /> : <Icon name="sparkle" />}
+          {p.generating ? <Spinner /> : <Icon name="setsquare" />}
           <span>{p.generating ? 'Generating plans…' : 'Generate plans'}</span>
           {!p.generating && (
             <span className="btn-hint" aria-hidden="true">
@@ -74,7 +74,7 @@ export function BriefPanel(p: Props) {
 
       <div className="understood" aria-live="polite">
         <div className="understood-head">
-          <h3>Understood</h3>
+          <h3 className="subhead">Understood</h3>
           {p.interpreting && <Spinner size={12} />}
           {p.briefEdited && (
             <button type="button" className="link-btn" onClick={p.onResetBrief} title="Discard program edits and re-read the text">
@@ -126,13 +126,16 @@ export function BriefPanel(p: Props) {
 
       {p.examples.length > 0 && (
         <div className="examples">
-          <h3>Examples</h3>
+          <h3 className="subhead">Examples</h3>
           <ul>
-            {p.examples.map((ex) => (
+            {p.examples.map((ex, i) => (
               <li key={ex.title}>
                 <button type="button" className="example" onClick={() => p.onPromptChange(ex.prompt)} title={ex.prompt}>
+                  <span className="example-index" aria-hidden="true">
+                    {String(i + 1).padStart(2, '0')}
+                  </span>
                   <strong>{ex.title}</strong>
-                  <span>{ex.prompt}</span>
+                  <span className="example-prompt">{ex.prompt}</span>
                 </button>
               </li>
             ))}
@@ -143,7 +146,7 @@ export function BriefPanel(p: Props) {
       {p.recent.length > 0 && (
         <div className="examples recent">
           <div className="understood-head">
-            <h3>Recent</h3>
+            <h3 className="subhead">Recent</h3>
             <button type="button" className="link-btn" onClick={p.onClearRecent}>
               Clear
             </button>
@@ -151,9 +154,9 @@ export function BriefPanel(p: Props) {
           <ul>
             {p.recent.map((r) => (
               <li key={r.at}>
-                <button type="button" className="example" onClick={() => p.onPickRecent(r)}>
-                  <Icon name="clock" size={13} />
-                  <span>{r.prompt || 'Custom program'}</span>
+                <button type="button" className="example recent-item" onClick={() => p.onPickRecent(r)}>
+                  <Icon name="clock" size={14} />
+                  <span className="example-prompt">{r.prompt || 'Custom program'}</span>
                 </button>
               </li>
             ))}

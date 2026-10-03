@@ -43,6 +43,7 @@ await shot('program-editor', {
   prompt: 'Small office, 600 sqft: reception, 3 private offices and a restroom',
   setup: async (page) => {
     await page.click('.disclosure summary')
+    await page.locator('.disclosure summary').blur()
     await page.keyboard.press('u')
   },
 })

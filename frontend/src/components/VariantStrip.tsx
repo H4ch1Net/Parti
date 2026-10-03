@@ -1,6 +1,7 @@
 import { useLayoutEffect, useRef } from 'react'
 import { formatArea } from '../lib/units'
 import type { Candidate, Units } from '../types'
+import { Bubble } from './Icon'
 
 function Thumb({ svg }: { svg: string }) {
   const ref = useRef<HTMLDivElement>(null)
@@ -36,11 +37,14 @@ export function VariantStrip({ candidates, drawings, selectedId, units, onSelect
           onClick={() => onSelect(c.id)}
           title={`${c.label} · ${c.strategy}`}
         >
-          <Thumb svg={drawings[c.id]?.[0] ?? ''} />
-          <span className="variant-meta">
-            <span className="variant-name">{c.label.replace('Variant ', '')}</span>
-            <span className={`score-pill grade-${c.score.grade}`}>{Math.round(c.score.total)}</span>
+          <span className="variant-head">
+            <Bubble active={c.id === selectedId}>{c.label.replace('Variant ', '')}</Bubble>
+            <span className="variant-score">
+              <strong>{Math.round(c.score.total)}</strong>
+              <small className={`grade-${c.score.grade}`}>{c.score.grade}</small>
+            </span>
           </span>
+          <Thumb svg={drawings[c.id]?.[0] ?? ''} />
           <span className="variant-sub">
             {c.strategy} · {formatArea(c.footprint.area_sqm * c.floors, units, 0)}
           </span>

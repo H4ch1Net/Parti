@@ -1,4 +1,4 @@
-.PHONY: setup dev api web test lint format build smoke screenshots docker
+.PHONY: setup dev api web test lint format build smoke screenshots brand docker
 
 PY := backend/.venv/bin
 
@@ -34,6 +34,9 @@ smoke:  ## End-to-end smoke test (needs `make dev` running)
 
 screenshots:  ## Refresh docs/screenshots (needs `make dev` running)
 	cd frontend && npm run screenshots
+
+brand:  ## Refresh banner, social image and touch icon (needs `make api` running)
+	cd frontend && npm run brand
 
 docker:  ## Single-image build serving API and web app on :8000
 	docker build -t parti . && docker run --rm -p 8000:8000 parti

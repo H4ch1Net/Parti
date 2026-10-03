@@ -11,19 +11,20 @@ from PIL import Image, ImageDraw, ImageFont
 
 from app.drawing.sheet import Arc, Circle, Ellipse, Line, Poly, Sheet, Text
 from app.drawing.style import resolve, rgb
+from app.drawing.titleblock import HEIGHT, MIN_WIDTH, TitleInfo, title_block
 
 FONTS = Path(__file__).parent / "fonts"
 TARGET_WIDTH = 2400
 SUPERSAMPLE = 2
 GAP_M = 1.0
-TITLE_M = 1.4
+TITLE_M = 0.3 + HEIGHT + 0.4
 
 
 @lru_cache(maxsize=64)
 def _font(size: int, bold: bool) -> ImageFont.FreeTypeFont | ImageFont.ImageFont:
-    # IBM Plex ships with the app (fonts/, SIL OFL) so exports match the screen.
+    # Archivo ships with the app (fonts/, SIL OFL) so exports match the screen.
     for path in (
-        FONTS / ("IBMPlexSans-SemiBold.woff" if bold else "IBMPlexSans-Regular.woff"),
+        FONTS / ("Archivo-SemiBold.ttf" if bold else "Archivo-Regular.ttf"),
         "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf" if bold else "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
     ):
         try:
@@ -36,14 +37,15 @@ def _font(size: int, bold: bool) -> ImageFont.FreeTypeFont | ImageFont.ImageFont
         return ImageFont.load_default()
 
 
-def render_png(sheets: list[Sheet], title_lines: list[str]) -> bytes:
-    total_w = sum(s.bounds[2] - s.bounds[0] for s in sheets) + GAP_M * (len(sheets) - 1)
+def render_png(sheets: list[Sheet], info: TitleInfo) -> bytes:
+    plans_w = sum(s.bounds[2] - s.bounds[0] for s in sheets) + GAP_M * (len(sheets) - 1)
+    total_w = max(plans_w, MIN_WIDTH)
     total_h = max(s.bounds[3] - s.bounds[1] for s in sheets) + TITLE_M
     k = min(110.0, TARGET_WIDTH / total_w) * SUPERSAMPLE
     img = Image.new("RGB", (math.ceil(total_w * k), math.ceil(total_h * k)), "white")
     draw = ImageDraw.Draw(img)
 
-    offset = 0.0
+    offset = (total_w - plans_w) / 2
     for sheet in sheets:
         minx, _miny, maxx, maxy = sheet.bounds
 
@@ -55,11 +57,11 @@ def render_png(sheets: list[Sheet], title_lines: list[str]) -> bytes:
                 _draw(img, draw, item, P, k)
         offset += (maxx - minx) + GAP_M
 
-    y = (total_h - TITLE_M + 0.35) * k
-    draw.line([(0.4 * k, y - 0.15 * k), (img.width - 0.4 * k, y - 0.15 * k)], fill=rgb("#1c1d21"), width=max(1, int(0.012 * k)))
-    for i, line in enumerate(title_lines):
-        font = _font(int((0.3 if i == 0 else 0.19) * k), i == 0)
-        draw.text((0.4 * k, y + (0 if i == 0 else 0.15 * k + i * 0.26 * k)), line, fill=rgb("#1c1d21" if i == 0 else "#55534f"), font=font)
+    def T(p):
+        return ((p[0] + 0.4) * k, (total_h - 0.4 - p[1]) * k)
+
+    for item in title_block(total_w - 0.8, info, "See scale bar"):
+        _draw(img, draw, item, T, k)
 
     out = img.resize((img.width // SUPERSAMPLE, img.height // SUPERSAMPLE), Image.LANCZOS)
     buf = BytesIO()
@@ -86,7 +88,7 @@ def _draw(img, draw, item, P, k: float) -> None:
     stroke = rgb(style.stroke) if style.stroke and width else None
     fill = rgb(style.fill) if style.fill else None
     if isinstance(item, Text):
-        font = _font(max(6, int(item.size * k * 1.05)), style.bold)
+        font = _font(max(6, int(item.size * k)), style.bold)
         x, y = P(item.pos)
         anchor = {"middle": "ms", "start": "ls", "end": "rs"}[item.anchor]
         if not item.rotate:
