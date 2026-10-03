@@ -186,9 +186,6 @@ class Score(BaseModel):
     categories: list[ScoreCategory]
     summary: str
 
-    def category(self, key: str) -> ScoreCategory:
-        return next(c for c in self.categories if c.key == key)
-
 
 class Issue(BaseModel):
     severity: Literal["error", "warning"]

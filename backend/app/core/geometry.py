@@ -129,11 +129,6 @@ class Segment:
         return [[r3(self.x0), r3(self.y0)], [r3(self.x1), r3(self.y1)]]
 
 
-SIDES = ("s", "e", "n", "w")
-# Inward normal of each side of a box (pointing into the room).
-NORMALS = {"s": (0.0, 1.0), "n": (0.0, -1.0), "w": (1.0, 0.0), "e": (-1.0, 0.0)}
-
-
 def side_segment(b: Box, side: str) -> Segment:
     if side == "s":
         return Segment(r3(b.x), r3(b.y), b.x1, r3(b.y))

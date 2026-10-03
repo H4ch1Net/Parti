@@ -7,7 +7,6 @@ import math
 from app.core.geometry import r3, side_segment, subtract_intervals
 from app.engine.access import exterior_sides
 from app.engine.layout import Layout
-from app.engine.rooms import SPECS
 from app.models.schemas import Door, Window
 
 WINDOW_HEIGHT = 1.2  # assumed glazing height when checking daylight ratios
@@ -87,7 +86,3 @@ def place_windows(layout: Layout, doors: list[Door]) -> list[Window]:
 
 def glazing_ratio(room_area: float, windows: list[Window]) -> float:
     return sum(w.width for w in windows) * WINDOW_HEIGHT / max(room_area, 0.01)
-
-
-def wants_daylight(room_type: str) -> bool:
-    return SPECS[room_type].habitable

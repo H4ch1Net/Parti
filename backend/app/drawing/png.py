@@ -5,12 +5,14 @@ from __future__ import annotations
 import math
 from functools import lru_cache
 from io import BytesIO
+from pathlib import Path
 
 from PIL import Image, ImageDraw, ImageFont
 
 from app.drawing.sheet import Arc, Circle, Ellipse, Line, Poly, Sheet, Text
 from app.drawing.style import resolve, rgb
 
+FONTS = Path(__file__).parent / "fonts"
 TARGET_WIDTH = 2400
 SUPERSAMPLE = 2
 GAP_M = 1.0
@@ -19,12 +21,13 @@ TITLE_M = 1.4
 
 @lru_cache(maxsize=64)
 def _font(size: int, bold: bool) -> ImageFont.FreeTypeFont | ImageFont.ImageFont:
+    # IBM Plex ships with the app (fonts/, SIL OFL) so exports match the screen.
     for path in (
+        FONTS / ("IBMPlexSans-SemiBold.woff" if bold else "IBMPlexSans-Regular.woff"),
         "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf" if bold else "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
-        "DejaVuSans-Bold.ttf" if bold else "DejaVuSans.ttf",
     ):
         try:
-            return ImageFont.truetype(path, size)
+            return ImageFont.truetype(str(path), size)
         except OSError:
             continue
     try:

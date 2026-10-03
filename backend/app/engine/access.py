@@ -177,7 +177,6 @@ class AccessPlan:
     unreachable: list[str] = field(default_factory=list)
     entry_missing: bool = False
     depth: dict[str, int] = field(default_factory=dict)  # tree depth from the entry
-    parents: dict[str, str] = field(default_factory=dict)
 
 
 class _Spans:
@@ -397,7 +396,6 @@ def plan_access(layout: Layout, style: str, commercial: bool) -> AccessPlan:
             _, s, t, seg = best
             visited.add(t.room.id)
             plan.depth[t.room.id] = plan.depth[s.room.id] + 1
-            plan.parents[t.room.id] = s.room.id
             tree.append((s, t, seg))
 
         for p in rooms:
