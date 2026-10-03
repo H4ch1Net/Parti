@@ -1,0 +1,144 @@
+/*
+  Parti design tokens.
+  Light theme: drafting paper and ink. Dark theme: blueprint.
+  Plan colours are shared with the server-rendered drawing via the classes in plan.css.
+*/
+
+:root {
+  color-scheme: light;
+  --font-sans: 'IBM Plex Sans', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --font-mono: 'IBM Plex Mono', ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+
+  --bg: #f1efe8;
+  --surface: #fbfaf6;
+  --surface-2: #f3f1ea;
+  --surface-3: #e9e6dd;
+  --line: #e0dcd1;
+  --line-strong: #cbc6b8;
+  --ink: #1b1c1f;
+  --ink-2: #4b4a45;
+  --ink-3: #7c796f;
+  --accent: #2f57c9;
+  --accent-hover: #2449b0;
+  --accent-ink: #ffffff;
+  --accent-soft: #e4e9f8;
+  --ok: #2c7a4b;
+  --ok-soft: #e1f0e5;
+  --warn: #9a5f0a;
+  --warn-soft: #f7ecd6;
+  --err: #bf3a30;
+  --err-soft: #f8e2df;
+  --focus: 0 0 0 3px color-mix(in srgb, var(--accent) 35%, transparent);
+
+  --canvas: #fdfcf8;
+  --grid: rgba(27, 28, 31, 0.045);
+  --grid-major: rgba(27, 28, 31, 0.08);
+
+  --zone-public: #f3eadb;
+  --zone-private: #e2ece0;
+  --zone-service: #dfe8f0;
+  --zone-circulation: #eeede8;
+  --plan-wall: #1b1c1f;
+  --plan-fx: #6e6c66;
+  --plan-fx-fill: #ffffff;
+  --plan-fx-solid: #eceae4;
+  --plan-label: #1b1c1f;
+  --plan-label-2: #55534d;
+  --plan-label-3: #7c796f;
+  --plan-dim: #5d5b55;
+  --plan-halo: rgba(253, 252, 248, 0.82);
+
+  --radius: 10px;
+  --radius-sm: 6px;
+  --radius-xs: 4px;
+  --shadow-sm: 0 1px 2px rgba(20, 20, 18, 0.06);
+  --shadow: 0 1px 2px rgba(20, 20, 18, 0.05), 0 6px 20px rgba(20, 20, 18, 0.07);
+  --shadow-lg: 0 2px 6px rgba(20, 20, 18, 0.06), 0 18px 48px rgba(20, 20, 18, 0.14);
+  --ease: cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    color-scheme: dark;
+    --bg: #0b111b;
+    --surface: #111a27;
+    --surface-2: #162132;
+    --surface-3: #1c2a3f;
+    --line: #1f2d43;
+    --line-strong: #2c3e5b;
+    --ink: #e5ebf4;
+    --ink-2: #a8b5c8;
+    --ink-3: #7182a0;
+    --accent: #7ea4ff;
+    --accent-hover: #9bb8ff;
+    --accent-ink: #0a1120;
+    --accent-soft: rgba(126, 164, 255, 0.15);
+    --ok: #5fcf8e;
+    --ok-soft: rgba(95, 207, 142, 0.13);
+    --warn: #f0b350;
+    --warn-soft: rgba(240, 179, 80, 0.13);
+    --err: #ff7b6f;
+    --err-soft: rgba(255, 123, 111, 0.13);
+    --canvas: #0e1828;
+    --grid: rgba(150, 185, 255, 0.05);
+    --grid-major: rgba(150, 185, 255, 0.09);
+    --zone-public: #1d2638;
+    --zone-private: #172a2c;
+    --zone-service: #16253b;
+    --zone-circulation: #141f31;
+    --plan-wall: #dde6f4;
+    --plan-fx: #7f95b6;
+    --plan-fx-fill: #101c2e;
+    --plan-fx-solid: #182841;
+    --plan-label: #e5ebf4;
+    --plan-label-2: #a8b5c8;
+    --plan-label-3: #7a8cab;
+    --plan-dim: #8ea0bd;
+    --plan-halo: rgba(14, 24, 40, 0.78);
+    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
+    --shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 8px 24px rgba(0, 0, 0, 0.35);
+    --shadow-lg: 0 2px 8px rgba(0, 0, 0, 0.35), 0 24px 60px rgba(0, 0, 0, 0.5);
+  }
+}
+
+:root[data-theme='dark'] {
+  color-scheme: dark;
+  --bg: #0b111b;
+  --surface: #111a27;
+  --surface-2: #162132;
+  --surface-3: #1c2a3f;
+  --line: #1f2d43;
+  --line-strong: #2c3e5b;
+  --ink: #e5ebf4;
+  --ink-2: #a8b5c8;
+  --ink-3: #7182a0;
+  --accent: #7ea4ff;
+  --accent-hover: #9bb8ff;
+  --accent-ink: #0a1120;
+  --accent-soft: rgba(126, 164, 255, 0.15);
+  --ok: #5fcf8e;
+  --ok-soft: rgba(95, 207, 142, 0.13);
+  --warn: #f0b350;
+  --warn-soft: rgba(240, 179, 80, 0.13);
+  --err: #ff7b6f;
+  --err-soft: rgba(255, 123, 111, 0.13);
+  --canvas: #0e1828;
+  --grid: rgba(150, 185, 255, 0.05);
+  --grid-major: rgba(150, 185, 255, 0.09);
+  --zone-public: #1d2638;
+  --zone-private: #172a2c;
+  --zone-service: #16253b;
+  --zone-circulation: #141f31;
+  --plan-wall: #dde6f4;
+  --plan-fx: #7f95b6;
+  --plan-fx-fill: #101c2e;
+  --plan-fx-solid: #182841;
+  --plan-label: #e5ebf4;
+  --plan-label-2: #a8b5c8;
+  --plan-label-3: #7a8cab;
+  --plan-dim: #8ea0bd;
+  --plan-halo: rgba(14, 24, 40, 0.78);
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
+  --shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 8px 24px rgba(0, 0, 0, 0.35);
+  --shadow-lg: 0 2px 8px rgba(0, 0, 0, 0.35), 0 24px 60px rgba(0, 0, 0, 0.5);
+}

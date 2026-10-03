@@ -82,8 +82,7 @@ def _evaluate(candidate: Candidate, program: Program, brief: StructuredBrief, fu
 
 def _rank_key(c: Candidate) -> tuple:
     errors = sum(1 for i in c.validation.issues if i.severity == "error")
-    narrow = sum(1 for i in c.validation.issues if i.code == "dims.aspect")
-    return (errors, narrow, -c.score.total)
+    return (errors, -c.score.total)
 
 
 def generate(brief: StructuredBrief, count: int = 6) -> GenerateResponse:
@@ -108,10 +107,10 @@ def generate(brief: StructuredBrief, count: int = 6) -> GenerateResponse:
     shortlist: list[Layout] = []
     keys: dict[tuple, int] = {}
     for _cand, layout in quick:
-        if len(shortlist) >= count * 3:
+        if len(shortlist) >= count * 2:
             break
         k = layout.key
-        if keys.get(k, 0) >= 1 and len(quick) > count * 3:
+        if keys.get(k, 0) >= 1 and len(quick) > count * 2:
             continue
         keys[k] = keys.get(k, 0) + 1
         shortlist.append(layout)

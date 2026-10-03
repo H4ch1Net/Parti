@@ -142,7 +142,14 @@ def render_svg(sheets: list[Sheet], mode: str = "app", title_lines: list[str] | 
 
     vb = f"0 0 {_f(total_w)} {_f(total_h)}"
     if mode == "app":
-        return f'<svg xmlns="http://www.w3.org/2000/svg" class="pt-plan" viewBox="{vb}" preserveAspectRatio="xMidYMid meet">{"".join(body)}</svg>'
+        # Box of the building itself (without dimension margins), in SVG units.
+        minx, _miny, _maxx, maxy = sheets[0].bounds
+        pb = sheets[0].plan_box
+        plan = f"{_f(pb.x - minx)} {_f(maxy - pb.y1)} {_f(pb.w)} {_f(pb.h)}"
+        return (
+            f'<svg xmlns="http://www.w3.org/2000/svg" class="pt-plan" viewBox="{vb}" data-plan="{plan}" '
+            f'preserveAspectRatio="xMidYMid meet">{"".join(body)}</svg>'
+        )
     return (
         '<?xml version="1.0" encoding="UTF-8"?>\n'
         f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="{vb}" width="{_f(total_w * 10)}mm" height="{_f(total_h * 10)}mm">'

@@ -232,9 +232,32 @@ def _order_score(seq: tuple[ProgramRoom, ...], role: str, start_bias: bool, ends
     return s
 
 
+_ORDER_CACHE: dict[tuple, list[list[str]]] = {}
+
+
 def orderings(
     rooms: list[ProgramRoom], role: str, k: int = 3, start_bias: bool = False, ends: tuple = (None, None)
 ) -> list[list[ProgramRoom]]:
+    """Best room orders for a row, memoised by room identity and context."""
+    key = (
+        tuple((r.id, r.type, r.primary, r.target_area_sqm) for r in rooms),
+        role,
+        k,
+        start_bias,
+        tuple(e.id if e is not None else None for e in ends),
+        tuple(e.type if e is not None else None for e in ends),
+    )
+    cached = _ORDER_CACHE.get(key)
+    if cached is None:
+        cached = [[r.id for r in order] for order in _orderings(rooms, role, k, start_bias, ends)]
+        if len(_ORDER_CACHE) > 4096:
+            _ORDER_CACHE.clear()
+        _ORDER_CACHE[key] = cached
+    by_id = {r.id: r for r in rooms}
+    return [[by_id[i] for i in order] for order in cached]
+
+
+def _orderings(rooms: list[ProgramRoom], role: str, k: int, start_bias: bool, ends: tuple) -> list[list[ProgramRoom]]:
     if len(rooms) <= 1:
         return [list(rooms)]
     if len(rooms) > 7:
@@ -371,7 +394,8 @@ def _band_assignments(rooms: list[ProgramRoom]) -> list[tuple[list[ProgramRoom],
 def _upper_assignments(rooms: list[ProgramRoom]) -> list[tuple[list[ProgramRoom], list[ProgramRoom]]]:
     """Splits of a private upper level: some rooms face the front, the rest the back."""
     rooms = [r for r in rooms if r.type not in {"corridor", "stair"}]
-    movable = [r for r in rooms if r.type in UPPER_MOVABLE and not r.primary]
+    has_ensuite = any(r.type == "ensuite" for r in rooms)
+    movable = [r for r in rooms if r.type in UPPER_MOVABLE and not (r.primary and has_ensuite)]
     options = []
     for k in range(1, min(3, len(movable)) + 1):
         for combo in combinations(movable, k):
@@ -558,6 +582,7 @@ def layout_candidates(program: Program, building_type: str, limit: int = 160) ->
             )
         )
 
+    upper_cache: dict[tuple, tuple | None] = {}
     for ai, (front, back) in enumerate(g_assigns):
         back = back + [g_stair]
         for end_l, end_r, mode in _end_choices(back, g_hall is not None, g_stair):
@@ -574,8 +599,12 @@ def layout_candidates(program: Program, building_type: str, limit: int = 160) ->
                             front_units = round(max(p.box.y1 for p in g_placed if p.room.id in front_ids) / GRID)
                             all_placed = list(g_placed)
                             feasible = ok
-                            for lv_hall, lv_stair, lv_assigns in uppers:
-                                best_lv = _best_upper(lv_assigns, lv_hall, lv_stair, hall_units, front_units, w, d)
+                            for li, (lv_hall, lv_stair, lv_assigns) in enumerate(uppers):
+                                # Upper levels only depend on the footprint and the pinned front depth.
+                                ck = (li, w, d, front_units)
+                                if ck not in upper_cache:
+                                    upper_cache[ck] = _best_upper(lv_assigns, lv_hall, lv_stair, hall_units, front_units, w, d)
+                                best_lv = upper_cache[ck]
                                 if best_lv is None:
                                     feasible = False
                                     continue

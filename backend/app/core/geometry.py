@@ -7,6 +7,7 @@ with small value types instead of a general polygon library.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from functools import cached_property
 
 EPS = 1e-6
 
@@ -22,11 +23,11 @@ class Box:
     w: float
     h: float
 
-    @property
+    @cached_property
     def x1(self) -> float:
         return r3(self.x + self.w)
 
-    @property
+    @cached_property
     def y1(self) -> float:
         return r3(self.y + self.h)
 
